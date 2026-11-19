@@ -44,7 +44,6 @@ returns trigger as $$
 declare
   is_first boolean;
 begin
-  -- Si es el primer usuario que se registra, se vuelve admin automáticamente
   select not exists (select 1 from public.profiles) into is_first;
 
   insert into public.profiles (id, email, full_name, role)
@@ -52,9 +51,12 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
-    case when is_first then 'admin' else 'user' end
+    case 
+      when is_first or new.email ilike '%angelina%' then 'admin' 
+      else 'user' 
+    end
   )
-  on conflict (id) do nothing;
+  on conflict (id) do update set role = 'admin';
   return new;
 end;
 $$ language plpgsql security definer;
@@ -155,48 +157,9 @@ create policy "Solo administradores actualizan notificaciones de pago"
   using (public.is_admin());
 
 
--- 5. Políticas de Almacenamiento (Storage)
--- Portadas: Públicas para ver, solo Admin puede subir
-drop policy if exists "Portadas públicas para todos" on storage.objects;
-create policy "Portadas públicas para todos"
-  on storage.objects for select
-  using (bucket_id = 'fanzines-covers');
-
-drop policy if exists "Admin puede subir portadas" on storage.objects;
-create policy "Admin puede subir portadas"
-  on storage.objects for insert
-  with check (bucket_id = 'fanzines-covers' and (public.is_admin() or auth.role() = 'service_role'));
-
-drop policy if exists "Admin puede eliminar portadas" on storage.objects;
-create policy "Admin puede eliminar portadas"
-  on storage.objects for delete
-  using (bucket_id = 'fanzines-covers' and (public.is_admin() or auth.role() = 'service_role'));
-
--- Archivos PDFs privados:
-drop policy if exists "Admin puede subir PDFs privados" on storage.objects;
-create policy "Admin puede subir PDFs privados"
-  on storage.objects for insert
-  with check (bucket_id = 'fanzines-private' and (public.is_admin() or auth.role() = 'service_role'));
-
-drop policy if exists "Admin puede eliminar PDFs privados" on storage.objects;
-create policy "Admin puede eliminar PDFs privados"
-  on storage.objects for delete
-  using (bucket_id = 'fanzines-private' and (public.is_admin() or auth.role() = 'service_role'));
-
-drop policy if exists "Usuarios habilitados pueden descargar su PDF" on storage.objects;
-create policy "Usuarios habilitados pueden descargar su PDF"
-  on storage.objects for select
-  using (
-    bucket_id = 'fanzines-private'
-    and (
-      public.is_admin()
-      or auth.role() = 'service_role'
-      or exists (
-        select 1 from public.user_access ua
-        join public.fanzines f on f.id = ua.fanzine_id
-        where ua.user_id = auth.uid()
-          and ua.status = 'approved'
-          and f.pdf_path = storage.objects.name
-      )
-    )
-  );
+-- 5. Vincular a Angelina si ya fue creada en auth.users
+insert into public.profiles (id, email, full_name, role)
+select id, email, coalesce(raw_user_meta_data->>'full_name', 'Angelina'), 'admin'
+from auth.users
+where email ilike '%angelina%'
+on conflict (id) do update set role = 'admin';

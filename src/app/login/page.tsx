@@ -10,7 +10,7 @@ export default function LoginPage() {
   const supabase = createClient();
 
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('');
+  const [emailOrUser, setEmailOrUser] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,21 +23,26 @@ export default function LoginPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    // Si el usuario escribe solo "Angelina", lo convertimos a "angelina@fanzines.com"
+    let emailToUse = emailOrUser.trim().toLowerCase();
+    if (!emailToUse.includes('@')) {
+      emailToUse = `${emailToUse}@fanzines.com`;
+    }
+
     try {
       if (isRegister) {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: emailToUse,
           password,
           options: {
             data: {
-              full_name: fullName,
+              full_name: fullName || emailOrUser,
             },
           },
         });
 
         if (error) throw error;
 
-        // Si Supabase tiene confirmación de email activada o no
         if (data.user && !data.session) {
           setSuccessMsg('¡Cuenta creada! Revisa tu correo electrónico para confirmar tu cuenta.');
         } else {
@@ -49,7 +54,7 @@ export default function LoginPage() {
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: emailToUse,
           password,
         });
 
@@ -79,7 +84,7 @@ export default function LoginPage() {
           <p className="text-sm text-stone-500 mt-1">
             {isRegister
               ? 'Regístrate para acceder y descargar tus fanzines'
-              : 'Ingresa con tu email para ver tus fanzines adquiridos'}
+              : 'Ingresa con tu email o usuario para ver tus fanzines'}
           </p>
         </div>
 
@@ -119,16 +124,16 @@ export default function LoginPage() {
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
-              Correo Electrónico
+              Usuario o Correo Electrónico
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3.5 top-3.5 text-stone-400" />
               <input
-                type="email"
+                type="text"
                 required
-                placeholder="tu@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                placeholder="angelina o tu@email.com"
+                value={emailOrUser}
+                onChange={(e) => setEmailOrUser(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 transition-all text-sm"
               />
             </div>
