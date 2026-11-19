@@ -15,6 +15,11 @@ export default function Navbar() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+      setLoading(false);
+      return;
+    }
+
     async function checkUser() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
