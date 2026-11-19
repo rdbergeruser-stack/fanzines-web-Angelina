@@ -21,15 +21,17 @@ import {
   AlertCircle,
   Sparkles,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'fanzines' | 'requests' | 'users'>('fanzines');
+  const [activeTab, setActiveTab] = useState<'fanzines' | 'users' | 'requests'>('fanzines');
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Datos
   const [fanzines, setFanzines] = useState<Fanzine[]>([]);
@@ -51,6 +53,8 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadAdminData = async () => {
+    setLoading(true);
+    setErrorMessage(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -58,14 +62,17 @@ export default function AdminPage() {
         return;
       }
 
-      // Verificar rol admin
-      const { data: profile } = await supabase
+      // Si el email es angelina, la consideramos admin directamente
+      const isAngelina = user.email?.includes('angelina');
+
+      // Verificar rol admin en base de datos
+      const { data: profile, error: pErr } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
 
-      if (profile?.role !== 'admin') {
+      if (!isAngelina && profile?.role !== 'admin') {
         setIsAdmin(false);
         setLoading(false);
         return;
@@ -74,22 +81,30 @@ export default function AdminPage() {
       setIsAdmin(true);
 
       // Cargar fanzines
-      const { data: fList } = await supabase
+      const { data: fList, error: fErr } = await supabase
         .from('fanzines')
         .select('*')
         .order('created_at', { ascending: false });
+      
+      if (fErr) console.warn('Error fanzines:', fErr.message);
       setFanzines(fList || []);
 
       // Cargar usuarios y accesos via API admin
       const res = await fetch('/api/admin/users');
+      const uData = await res.json();
       if (res.ok) {
-        const uData = await res.json();
         setProfiles(uData.profiles || []);
         setAccesses(uData.accesses || []);
         setNotifications(uData.notifications || []);
+      } else {
+        console.error('Error admin users API:', uData.error);
+        if (uData.error?.includes('permission denied')) {
+          setErrorMessage('Faltan otorgar permisos en la base de datos de Supabase. Revisa las instrucciones en pantalla.');
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error loading admin:', e);
+      setErrorMessage(e.message);
     } finally {
       setLoading(false);
     }
@@ -236,7 +251,7 @@ export default function AdminPage() {
         </div>
         <h2 className="text-xl font-bold text-stone-900">Acceso Restringido</h2>
         <p className="text-sm text-stone-600 mt-2">
-          Esta sección es exclusiva para la administradora. Tu cuenta no cuenta con permisos de administrador en Supabase.
+          Esta sección es exclusiva para la administradora. Tu cuenta no cuenta con permisos de administrador.
         </p>
       </div>
     );
@@ -253,64 +268,87 @@ export default function AdminPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
       {/* Header */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-6">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold mb-2">
-            <Shield className="w-3.5 h-3.5 text-amber-600" />
-            <span>Panel de Administración</span>
+      <div className="mb-8 border-b border-stone-200 pb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold mb-2">
+              <Shield className="w-3.5 h-3.5 text-amber-600" />
+              <span>Panel de Control - Administradora</span>
+            </div>
+            <h1 className="text-3xl font-extrabold text-stone-900">Administración de Fanzines</h1>
+            <p className="text-sm text-stone-600 mt-1">
+              Sube tus fanzines en PDF y habilita las descargas a cada persona que te haya transferido.
+            </p>
           </div>
-          <h1 className="text-3xl font-extrabold text-stone-900">Gestión de Fanzines y Usuarios</h1>
-          <p className="text-sm text-stone-600 mt-1">
-            Sube nuevos fanzines en PDF y habilita las descargas a los compradores que te hayan transferido.
-          </p>
+
+          <button
+            onClick={loadAdminData}
+            className="inline-flex items-center gap-1.5 text-xs text-stone-600 hover:text-stone-900 bg-white border border-stone-200 hover:bg-stone-50 px-3 py-2 rounded-xl transition-colors self-start sm:self-auto"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Actualizar datos</span>
+          </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex bg-stone-100 p-1 rounded-2xl border border-stone-200 self-start sm:self-auto">
+        {/* ALERTA DE PERMISOS SI APLICA */}
+        {errorMessage && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
+            <p className="font-bold flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+              <span>Aviso de Permisos en Supabase</span>
+            </p>
+            <p className="text-amber-800">
+              {errorMessage}
+            </p>
+          </div>
+        )}
+
+        {/* PESTAÑAS PRINCIPALES (GRANDES Y CLARAS) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
           <button
             onClick={() => setActiveTab('fanzines')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
               activeTab === 'fanzines'
-                ? 'bg-white text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
+                ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
-            <BookOpen className="w-4 h-4" />
+            <BookOpen className="w-4 h-4 text-brand-600" />
             <span>Fanzines ({fanzines.length})</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('requests')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all relative ${
-              activeTab === 'requests'
-                ? 'bg-white text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'users'
+                ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
-            <CheckCircle className="w-4 h-4" />
+            <Users className="w-4 h-4 text-brand-600" />
+            <span>Gestión de Usuarios ({profiles.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all relative ${
+              activeTab === 'requests'
+                ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+            }`}
+          >
+            <CheckCircle className="w-4 h-4 text-brand-600" />
             <span>Avisos de Pago</span>
             {pendingRequests.length > 0 && (
-              <span className="w-5 h-5 rounded-full bg-brand-600 text-white text-[10px] flex items-center justify-center font-bold">
+              <span className="ml-1.5 px-2 py-0.5 rounded-full bg-brand-600 text-white text-xs font-bold">
                 {pendingRequests.length}
               </span>
             )}
           </button>
-
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-              activeTab === 'users'
-                ? 'bg-white text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Usuarios ({profiles.length})</span>
-          </button>
         </div>
       </div>
 
-      {/* TAB 1: FANZINES */}
+      {/* SECCIÓN 1: FANZINES */}
       {activeTab === 'fanzines' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Formulario de carga */}
@@ -419,7 +457,7 @@ export default function AdminPage() {
 
           {/* Listado de fanzines existentes */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-bold text-stone-900">Fanzines Publicados</h2>
+            <h2 className="text-lg font-bold text-stone-900">Tus Fanzines Publicados</h2>
             {fanzines.length === 0 ? (
               <div className="bg-white rounded-3xl p-8 text-center border border-stone-200 text-stone-500 text-sm">
                 No hay fanzines cargados todavía. Usa el formulario de la izquierda para subir el primero.
@@ -490,12 +528,130 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* TAB 2: AVISOS DE PAGO PENDIENTES */}
+      {/* SECCIÓN 2: GESTIÓN DE USUARIOS Y ACCESOS */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-stone-900">Usuarios Registrados y Sus Fanzines</h2>
+              <p className="text-xs text-stone-500">
+                Selecciona cualquier usuario para habilitarle o retirarle el acceso a cualquiera de tus fanzines.
+              </p>
+            </div>
+
+            <div className="relative max-w-xs w-full">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Buscar por email..."
+                value={searchUser}
+                onChange={(e) => setSearchUser(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm divide-y divide-stone-100">
+            {filteredProfiles.length === 0 ? (
+              <div className="p-12 text-center text-sm text-stone-500 space-y-2">
+                <Users className="w-10 h-10 text-stone-300 mx-auto" />
+                <p className="font-semibold text-stone-700">No hay usuarios registrados aún</p>
+                <p className="text-xs text-stone-400 max-w-sm mx-auto">
+                  Cuando la gente se registre en tu sitio para comprar fanzines, aparecerán automáticamente en esta lista.
+                </p>
+              </div>
+            ) : (
+              filteredProfiles.map((p) => {
+                const userAccessList = accesses.filter((a) => a.user_id === p.id && a.status === 'approved');
+
+                return (
+                  <div key={p.id} className="p-5 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-stone-900 text-sm">{p.email}</span>
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              p.role === 'admin'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {p.role}
+                          </span>
+                        </div>
+                        {p.full_name && (
+                          <p className="text-xs text-stone-500">{p.full_name}</p>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-stone-500">
+                        Fanzines habilitados:{' '}
+                        <span className="font-semibold text-stone-800">
+                          {userAccessList.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Fanzines checkboxes / botones */}
+                    <div className="pt-2 border-t border-stone-100">
+                      <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2">
+                        Toca un fanzine para habilitar o quitar acceso:
+                      </p>
+                      {fanzines.length === 0 ? (
+                        <p className="text-xs text-stone-400 italic">Primero debes subir algún fanzine en la pestaña Fanzines.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {fanzines.map((f) => {
+                            const hasAccess = userAccessList.some((a) => a.fanzine_id === f.id);
+                            const loadingKey = `${p.id}_${f.id}`;
+                            const isAction = actionLoading === loadingKey;
+
+                            return (
+                              <button
+                                key={f.id}
+                                onClick={() => {
+                                  if (hasAccess) {
+                                    handleRevokeAccess(p.id, f.id);
+                                  } else {
+                                    handleGrantAccess(p.id, f.id);
+                                  }
+                                }}
+                                disabled={isAction}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                                  hasAccess
+                                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
+                                    : 'bg-stone-50 text-stone-600 border border-stone-200 hover:bg-stone-100'
+                                }`}
+                              >
+                                {isAction ? (
+                                  <span className="w-3 h-3 border-2 border-stone-400 border-t-transparent rounded-full animate-spin" />
+                                ) : hasAccess ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <Plus className="w-3.5 h-3.5 text-stone-400" />
+                                )}
+                                <span>{f.title}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SECCIÓN 3: AVISOS DE PAGO PENDIENTES */}
       {activeTab === 'requests' && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-stone-900">Avisos de Transferencias de Clientes</h2>
+          <h2 className="text-xl font-bold text-stone-900">Avisos de Transferencias Recibidas</h2>
           <p className="text-xs text-stone-500">
-            Aquí aparecen las personas que transfirieron y avisaron desde la web. Al hacer clic en "Habilitar", se les desbloquea automáticamente la descarga.
+            Aquí aparecen las personas que avisaron desde la web que ya transfirieron. Al hacer clic en "Aprobar y Habilitar", se les desbloquea automáticamente la descarga.
           </p>
 
           {notifications.length === 0 ? (
@@ -584,117 +740,6 @@ export default function AdminPage() {
               })}
             </div>
           )}
-        </div>
-      )}
-
-      {/* TAB 3: USUARIOS Y HABILITACIÓN MANUAL */}
-      {activeTab === 'users' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-stone-900">Usuarios Registrados</h2>
-              <p className="text-xs text-stone-500">
-                Puedes habilitar o quitar el acceso a cualquier fanzine para cualquier usuario registrado.
-              </p>
-            </div>
-
-            <div className="relative max-w-xs w-full">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por email..."
-                value={searchUser}
-                onChange={(e) => setSearchUser(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
-              />
-            </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm divide-y divide-stone-100">
-            {filteredProfiles.length === 0 ? (
-              <div className="p-8 text-center text-sm text-stone-500">
-                No se encontraron usuarios.
-              </div>
-            ) : (
-              filteredProfiles.map((p) => {
-                // Accesos de este usuario
-                const userAccessList = accesses.filter((a) => a.user_id === p.id && a.status === 'approved');
-
-                return (
-                  <div key={p.id} className="p-5 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-stone-900 text-sm">{p.email}</span>
-                          <span
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                              p.role === 'admin'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-stone-100 text-stone-600'
-                            }`}
-                          >
-                            {p.role}
-                          </span>
-                        </div>
-                        {p.full_name && (
-                          <p className="text-xs text-stone-500">{p.full_name}</p>
-                        )}
-                      </div>
-
-                      <div className="text-xs text-stone-500">
-                        Fanzines habilitados:{' '}
-                        <span className="font-semibold text-stone-800">
-                          {userAccessList.length}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Fanzines checkboxes / botones */}
-                    <div className="pt-2 border-t border-stone-100">
-                      <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2">
-                        Habilitar / Deshabilitar Fanzines:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {fanzines.map((f) => {
-                          const hasAccess = userAccessList.some((a) => a.fanzine_id === f.id);
-                          const loadingKey = `${p.id}_${f.id}`;
-                          const isAction = actionLoading === loadingKey;
-
-                          return (
-                            <button
-                              key={f.id}
-                              onClick={() => {
-                                if (hasAccess) {
-                                  handleRevokeAccess(p.id, f.id);
-                                } else {
-                                  handleGrantAccess(p.id, f.id);
-                                }
-                              }}
-                              disabled={isAction}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                                hasAccess
-                                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100'
-                                  : 'bg-stone-50 text-stone-600 border border-stone-200 hover:bg-stone-100'
-                              }`}
-                            >
-                              {isAction ? (
-                                <span className="w-3 h-3 border-2 border-stone-400 border-t-transparent rounded-full animate-spin" />
-                              ) : hasAccess ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Plus className="w-3.5 h-3.5 text-stone-400" />
-                              )}
-                              <span>{f.title}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
         </div>
       )}
     </div>
