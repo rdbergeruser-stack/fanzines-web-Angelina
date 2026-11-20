@@ -22,11 +22,11 @@ import {
   Sparkles,
   Check,
   RefreshCw,
-  Edit,
   Key,
   Lock,
   Mail,
   User,
+  UserPlus,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -57,11 +57,22 @@ export default function AdminPage() {
   const [searchUser, setSearchUser] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // Modal para editar usuario / contraseña
+  // Modal para CREAR usuario
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createFullName, setCreateFullName] = useState('');
+  const [createPassword, setCreatePassword] = useState('123456');
+  const [createMustChange, setCreateMustChange] = useState(true);
+  const [createRole, setCreateRole] = useState<'admin' | 'user'>('user');
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createMsg, setCreateMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Modal para EDITAR usuario / contraseña
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editFullName, setEditFullName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
+  const [editMustChange, setEditMustChange] = useState(false);
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [savingUser, setSavingUser] = useState(false);
   const [userModalMsg, setUserModalMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
@@ -247,17 +258,57 @@ export default function AdminPage() {
     }
   };
 
+  // Crear usuario manualmente
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingUser(true);
+    setCreateMsg(null);
+
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: createEmail,
+          fullName: createFullName,
+          password: createPassword || '123456',
+          mustChangePassword: createMustChange,
+          role: createRole,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al crear el usuario');
+
+      setCreateMsg({ type: 'ok', text: '¡Usuario creado con éxito! Ya puede iniciar sesión.' });
+      await loadAdminData();
+
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setCreateEmail('');
+        setCreateFullName('');
+        setCreatePassword('123456');
+        setCreateMustChange(true);
+      }, 1200);
+    } catch (err: any) {
+      setCreateMsg({ type: 'err', text: err.message || 'Error al crear usuario' });
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   // Abrir modal de edición de usuario
   const openEditUser = (u: Profile) => {
     setEditingUser(u);
     setEditFullName(u.full_name || '');
     setEditEmail(u.email || '');
     setEditPassword('');
+    setEditMustChange(u.must_change_password || false);
     setEditRole(u.role || 'user');
     setUserModalMsg(null);
   };
 
-  // Guardar edición de usuario (contraseña, nombre, etc.)
+  // Guardar edición de usuario
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
@@ -270,6 +321,7 @@ export default function AdminPage() {
         fullName: editFullName,
         newEmail: editEmail !== editingUser.email ? editEmail : undefined,
         role: editRole,
+        mustChangePassword: editMustChange,
       };
 
       if (editPassword.trim()) {
@@ -288,13 +340,13 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar usuario');
 
-      setUserModalMsg({ type: 'ok', text: '¡Usuario y contraseña actualizados correctamente!' });
+      setUserModalMsg({ type: 'ok', text: '¡Usuario actualizado correctamente!' });
       
       // Actualizar estado local
       setProfiles((prev) =>
         prev.map((p) =>
           p.id === editingUser.id
-            ? { ...p, full_name: editFullName, email: editEmail, role: editRole }
+            ? { ...p, full_name: editFullName, email: editEmail, role: editRole, must_change_password: editMustChange }
             : p
         )
       );
@@ -367,7 +419,7 @@ export default function AdminPage() {
             </div>
             <h1 className="text-3xl font-extrabold text-stone-900">Administración de Fanzines</h1>
             <p className="text-sm text-stone-600 mt-1">
-              Sube tus fanzines en PDF y habilita las descargas a cada persona que te haya transferido.
+              Sube tus fanzines en PDF, crea usuarios para tus clientes y habilita sus descargas.
             </p>
           </div>
 
@@ -622,29 +674,47 @@ export default function AdminPage() {
             <div>
               <h2 className="text-xl font-bold text-stone-900">Usuarios Registrados y Sus Fanzines</h2>
               <p className="text-xs text-stone-500">
-                Administra usuarios, modifica sus datos o contraseñas, y habilítales sus fanzines.
+                Solo tú como administradora puedes crear nuevos usuarios para tus compradores.
               </p>
             </div>
 
-            <div className="relative max-w-xs w-full">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="Buscar por email..."
-                value={searchUser}
-                onChange={(e) => setSearchUser(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
-              />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              <button
+                onClick={() => {
+                  setShowCreateModal(true);
+                  setCreateEmail('');
+                  setCreateFullName('');
+                  setCreatePassword('123456');
+                  setCreateMustChange(true);
+                  setCreateRole('user');
+                  setCreateMsg(null);
+                }}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold shadow-md shadow-brand-500/20 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ Crear Nuevo Usuario</span>
+              </button>
+
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Buscar por email o alias..."
+                  value={searchUser}
+                  onChange={(e) => setSearchUser(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                />
+              </div>
             </div>
           </div>
 
           <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm divide-y divide-stone-100">
             {filteredProfiles.length === 0 ? (
-              <div className="p-12 text-center text-sm text-stone-500 space-y-2">
+              <div className="p-12 text-center text-sm text-stone-500 space-y-3">
                 <Users className="w-10 h-10 text-stone-300 mx-auto" />
-                <p className="font-semibold text-stone-700">No hay usuarios registrados aún</p>
+                <p className="font-semibold text-stone-700">No hay usuarios registrados que coincidan</p>
                 <p className="text-xs text-stone-400 max-w-sm mx-auto">
-                  Cuando la gente se registre en tu sitio para comprar fanzines, aparecerán automáticamente en esta lista.
+                  Usa el botón "+ Crear Nuevo Usuario" arriba para dar de alta a un comprador con su contraseña inicial.
                 </p>
               </div>
             ) : (
@@ -655,7 +725,7 @@ export default function AdminPage() {
                   <div key={p.id} className="p-5 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-bold text-stone-900 text-sm">{p.email}</span>
                           <span
                             className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
@@ -666,9 +736,19 @@ export default function AdminPage() {
                           >
                             {p.role}
                           </span>
+
+                          {p.must_change_password ? (
+                            <span className="text-[10px] bg-amber-50 border border-amber-200 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                              Debe cambiar clave en 1° login
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-emerald-50 text-emerald-700 font-medium px-2 py-0.5 rounded-full">
+                              Clave personalizada
+                            </span>
+                          )}
                         </div>
                         {p.full_name && (
-                          <p className="text-xs text-stone-500">{p.full_name}</p>
+                          <p className="text-xs text-stone-500 mt-0.5">{p.full_name}</p>
                         )}
                       </div>
 
@@ -747,7 +827,7 @@ export default function AdminPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-bold text-stone-900">Avisos de Transferencias Recibidas</h2>
           <p className="text-xs text-stone-500">
-            Aquí aparecen las personas que avisaron desde la web que ya transfirieron. Al hacer clic en "Aprobar y Habilitar", se les desbloquea automáticamente la descarga.
+            Aquí aparecen las notificaciones enviadas por clientes.
           </p>
 
           {notifications.length === 0 ? (
@@ -839,7 +919,160 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* MODAL: EDITAR USUARIO Y CONTRASEÑA */}
+      {/* MODAL 1: CREAR NUEVO USUARIO */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Crear Usuario Comprador</h3>
+                  <p className="text-xs text-stone-500">Alta de cuenta para un cliente</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(false)}
+                className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {createMsg && (
+              <div
+                className={`mb-4 p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  createMsg.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {createMsg.type === 'ok' ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                )}
+                <span>{createMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nombre o Alias del Comprador
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Ej: Sofía Martínez"
+                    value={createFullName}
+                    onChange={(e) => setCreateFullName(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Usuario o Correo Electrónico *
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="sofia o sofia@email.com"
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Si escribes solo el nombre (ej: "sofia"), el sistema le asignará "sofia@fanzines.com".
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Contraseña Inicial Temporal
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="text"
+                    required
+                    minLength={6}
+                    value={createPassword}
+                    onChange={(e) => setCreatePassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono font-semibold"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Por defecto sugerimos <code>123456</code>.
+                </p>
+              </div>
+
+              {/* Checkbox para forzar cambio de clave */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createMustChange}
+                    onChange={(e) => setCreateMustChange(e.target.checked)}
+                    className="mt-0.5 rounded text-brand-600 focus:ring-brand-500"
+                  />
+                  <div className="text-xs">
+                    <span className="font-semibold text-stone-800 block">
+                      Exigir cambio de clave al ingresar
+                    </span>
+                    <span className="text-[11px] text-stone-500 leading-tight block mt-0.5">
+                      Cuando el cliente inicie sesión por primera vez con la clave temporal, la página le obligará a crear su contraseña personal.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tipo de Cuenta
+                </label>
+                <select
+                  value={createRole}
+                  onChange={(e) => setCreateRole(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 bg-white"
+                >
+                  <option value="user">Cliente estándar (solo descarga fanzines habilitados)</option>
+                  <option value="admin">Administrador (acceso completo al panel)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="py-2 px-3 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="py-2.5 px-4 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {creatingUser ? 'Creando usuario...' : 'Crear Usuario'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: EDITAR USUARIO Y CONTRASEÑA */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative">
@@ -931,6 +1164,20 @@ export default function AdminPage() {
                 <p className="text-[10px] text-stone-400 mt-1">
                   Si el cliente se olvidó su clave, puedes escribirle aquí una nueva (mínimo 6 caracteres).
                 </p>
+              </div>
+
+              <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editMustChange}
+                    onChange={(e) => setEditMustChange(e.target.checked)}
+                    className="rounded text-brand-600 focus:ring-brand-500"
+                  />
+                  <span className="text-xs font-medium text-stone-700">
+                    Exigirle cambiar contraseña en su próximo inicio de sesión
+                  </span>
+                </label>
               </div>
 
               <div>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { BookOpen, LogOut, Shield, User, Download, Sparkles } from 'lucide-react';
+import { BookOpen, LogOut, Shield, User, Download } from 'lucide-react';
 
 export default function Navbar() {
   const router = useRouter();
@@ -27,10 +27,16 @@ export default function Navbar() {
         if (user) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, must_change_password')
             .eq('id', user.id)
             .single();
+
           setRole(profile?.role || 'user');
+
+          // Si el usuario tiene pendiente cambiar la contraseña, redirigir a /cambiar-clave
+          if (profile?.must_change_password && pathname !== '/cambiar-clave') {
+            router.push('/cambiar-clave');
+          }
         } else {
           setRole(null);
         }
@@ -50,10 +56,15 @@ export default function Navbar() {
         if (currentUser) {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('role')
+            .select('role, must_change_password')
             .eq('id', currentUser.id)
             .single();
+
           setRole(profile?.role || 'user');
+
+          if (profile?.must_change_password && pathname !== '/cambiar-clave') {
+            router.push('/cambiar-clave');
+          }
         } else {
           setRole(null);
         }
@@ -63,7 +74,7 @@ export default function Navbar() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, pathname, router]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();

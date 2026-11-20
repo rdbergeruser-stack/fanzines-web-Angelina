@@ -3,75 +3,53 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { BookOpen, Mail, Lock, User, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [isRegister, setIsRegister] = useState(false);
   const [emailOrUser, setEmailOrUser] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg(null);
-    setSuccessMsg(null);
 
-    // Si el usuario escribe solo "rdberger", lo convertimos a "rdberger@fanzines.com"
+    // Si el usuario escribe solo "angelina" o "pepito", lo convertimos a "@fanzines.com"
     let emailToUse = emailOrUser.trim().toLowerCase();
     if (!emailToUse.includes('@')) {
       emailToUse = `${emailToUse}@fanzines.com`;
     }
 
     try {
-      if (isRegister) {
-        // Registro directo pre-confirmado (sin necesidad de correo)
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: emailToUse,
-            password,
-            fullName,
-          }),
-        });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password,
+      });
 
-        const regData = await res.json();
-        if (!res.ok) throw new Error(regData.error || 'Error al crear la cuenta');
-
-        // Iniciar sesión automáticamente
-        const { error: loginError } = await supabase.auth.signInWithPassword({
-          email: emailToUse,
-          password,
-        });
-
-        if (loginError) throw loginError;
-
-        setSuccessMsg('¡Cuenta creada e iniciada con éxito! Entrando...');
-        setTimeout(() => {
-          router.push('/');
-          router.refresh();
-        }, 800);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: emailToUse,
-          password,
-        });
-
-        if (error) {
-          if (error.message.includes('Email not confirmed')) {
-            throw new Error('El correo aún no estaba confirmado. Ya lo activamos, intenta ingresar de nuevo.');
-          }
-          throw error;
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Usuario o contraseña incorrectos.');
         }
+        throw error;
+      }
 
-        router.push('/');
+      // Verificar si el usuario debe cambiar su contraseña obligatoriamente
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('must_change_password, role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile?.must_change_password) {
+        router.push('/cambiar-clave');
+        router.refresh();
+      } else {
+        router.push(profile?.role === 'admin' ? '/admin' : '/mis-fanzines');
         router.refresh();
       }
     } catch (err: any) {
@@ -90,12 +68,10 @@ export default function LoginPage() {
             <BookOpen className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-bold text-stone-900">
-            {isRegister ? 'Crear una cuenta' : 'Bienvenido/a de nuevo'}
+            Acceso a Fanzines
           </h1>
-          <p className="text-sm text-stone-500 mt-1">
-            {isRegister
-              ? 'Regístrate al instante sin esperar emails de confirmación'
-              : 'Ingresa con tu email o usuario para ver tus fanzines'}
+          <p className="text-sm text-stone-500 mt-2 leading-relaxed">
+            Ingresa con los datos de acceso que te proporcionó Angelina para ver y descargar tus publicaciones.
           </p>
         </div>
 
@@ -106,33 +82,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {successMsg && (
-          <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-2.5">
-            <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
-                Nombre o Alias
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 absolute left-3.5 top-3.5 text-stone-400" />
-                <input
-                  type="text"
-                  required
-                  placeholder="Tu nombre"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 transition-all text-sm"
-                />
-              </div>
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
               Usuario o Correo Electrónico
@@ -142,7 +92,7 @@ export default function LoginPage() {
               <input
                 type="text"
                 required
-                placeholder="rdberger o tu@email.com"
+                placeholder="ej: tu_nombre o tu@email.com"
                 value={emailOrUser}
                 onChange={(e) => setEmailOrUser(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 transition-all text-sm"
@@ -159,7 +109,6 @@ export default function LoginPage() {
               <input
                 type="password"
                 required
-                minLength={6}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -177,27 +126,20 @@ export default function LoginPage() {
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : (
               <>
-                <span>{isRegister ? 'Crear mi cuenta' : 'Ingresar'}</span>
+                <span>Ingresar</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
 
-        <div className="mt-6 pt-6 border-t border-stone-100 text-center">
-          <p className="text-sm text-stone-600">
-            {isRegister ? '¿Ya tienes una cuenta?' : '¿Aún no tienes cuenta?'}
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegister(!isRegister);
-                setErrorMsg(null);
-                setSuccessMsg(null);
-              }}
-              className="ml-2 font-semibold text-brand-600 hover:text-brand-700 hover:underline"
-            >
-              {isRegister ? 'Inicia sesión aquí' : 'Regístrate aquí'}
-            </button>
+        <div className="mt-8 pt-6 border-t border-stone-100 text-center">
+          <p className="text-xs text-stone-500 leading-relaxed">
+            ¿Compraste un fanzine y aún no tienes tus credenciales de acceso?
+            <br />
+            <span className="text-stone-700 font-medium">
+              Escríbele a Angelina para que te cree tu usuario y te asigne tus fanzines.
+            </span>
           </p>
         </div>
       </div>
