@@ -10,6 +10,7 @@ create table if not exists public.profiles (
   email text not null,
   full_name text,
   role text default 'user' check (role in ('admin', 'user')),
+  must_change_password boolean default false,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 

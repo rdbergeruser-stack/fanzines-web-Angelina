@@ -5,6 +5,7 @@ export interface Profile {
   email: string;
   full_name: string | null;
   role: UserRole;
+  must_change_password?: boolean;
   created_at: string;
 }
 
