@@ -31,6 +31,8 @@ import {
   Copy,
   MessageCircle,
   ExternalLink,
+  Phone,
+  Send,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -65,6 +67,7 @@ export default function AdminPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
   const [createFullName, setCreateFullName] = useState('');
+  const [createPhone, setCreatePhone] = useState('');
   const [createPassword, setCreatePassword] = useState('123456');
   const [createMustChange, setCreateMustChange] = useState(true);
   const [createRole, setCreateRole] = useState<'admin' | 'user'>('user');
@@ -74,6 +77,7 @@ export default function AdminPage() {
   // Modal para EDITAR usuario / contraseña
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editMustChange, setEditMustChange] = useState(false);
@@ -81,10 +85,12 @@ export default function AdminPage() {
   const [savingUser, setSavingUser] = useState(false);
   const [userModalMsg, setUserModalMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
-  // Modal para COMPARTIR credenciales por WhatsApp
+  // Modal para COMPARTIR credenciales o avisar fanzine por WhatsApp
   const [shareUser, setShareUser] = useState<Profile | null>(null);
   const [shareTempPass, setShareTempPass] = useState('123456');
   const [sharePhone, setSharePhone] = useState('');
+  const [shareMode, setShareMode] = useState<'credentials' | 'fanzine_ready'>('credentials');
+  const [shareFanzineTitle, setShareFanzineTitle] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
 
   const loadAdminData = async () => {
@@ -226,8 +232,46 @@ export default function AdminPage() {
     }
   };
 
+  // Formatear teléfono para la API de WhatsApp internacional
+  const formatWhatsAppPhone = (raw: string): string => {
+    let digits = raw.replace(/[^0-9]/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('549')) return digits;
+    if (digits.startsWith('54') && digits.length >= 12) {
+      return '549' + digits.slice(2);
+    }
+    if (digits.startsWith('0')) {
+      digits = digits.slice(1);
+    }
+    if (digits.length === 10) {
+      return `549${digits}`;
+    }
+    return digits;
+  };
+
+  // Abrir modal de compartir WhatsApp
+  const openShareWhatsApp = (
+    u: Profile,
+    options?: {
+      mode?: 'credentials' | 'fanzine_ready';
+      fanzineTitle?: string;
+      tempPass?: string;
+    }
+  ) => {
+    setShareUser(u);
+    setSharePhone(u.phone || '');
+    setShareTempPass(options?.tempPass || '123456');
+    setShareMode(options?.mode || 'credentials');
+    setShareFanzineTitle(options?.fanzineTitle || (fanzines[0]?.title || 'el fanzine'));
+    setCopiedShare(false);
+  };
+
   // Habilitar acceso a un usuario
-  const handleGrantAccess = async (userId: string, fanzineId: string) => {
+  const handleGrantAccess = async (
+    userId: string,
+    fanzineId: string,
+    autoNotifyWhatsApp: boolean = false
+  ) => {
     setActionLoading(`${userId}_${fanzineId}`);
     try {
       const res = await fetch('/api/admin/grant-access', {
@@ -237,6 +281,17 @@ export default function AdminPage() {
       });
       if (res.ok) {
         await loadAdminData();
+
+        if (autoNotifyWhatsApp) {
+          const targetUser = profiles.find((p) => p.id === userId);
+          const targetFanzine = fanzines.find((f) => f.id === fanzineId);
+          if (targetUser && targetFanzine) {
+            openShareWhatsApp(targetUser, {
+              mode: 'fanzine_ready',
+              fanzineTitle: targetFanzine.title,
+            });
+          }
+        }
       } else {
         alert('Error al otorgar acceso');
       }
@@ -268,27 +323,46 @@ export default function AdminPage() {
     }
   };
 
-  // Abrir modal de compartir WhatsApp
-  const openShareWhatsApp = (u: Profile, defaultPass: string = '123456') => {
-    setShareUser(u);
-    setShareTempPass(defaultPass);
-    setSharePhone('');
-    setCopiedShare(false);
-  };
-
   const getWhatsAppMessage = () => {
     if (!shareUser) return '';
     const cleanUser = shareUser.email.replace('@fanzines.com', '');
-    const name = shareUser.full_name || 'hola';
+    const name = shareUser.full_name || cleanUser;
+
+    if (shareMode === 'fanzine_ready') {
+      return `¡Hola ${name}! 🎨 Te aviso que ya tienes habilitado el fanzine "${shareFanzineTitle}" en tu cuenta de Angelina Fanzines.\n\nYa puedes entrar a leerlo en pantalla desde tu celular o descargarte el PDF en tu biblioteca:\n👉 https://fanzines-angelina.vercel.app/mis-fanzines\n\n¡Muchas gracias por apoyar mis publicaciones y que lo disfrutes mucho! ✨`;
+    }
+
     return `¡Hola ${name}! Ya tienes listo tu acceso a Angelina Fanzines para leer y descargar tus publicaciones.\n\n🌐 Entra en: https://fanzines-angelina.vercel.app/login\n👤 Usuario: ${cleanUser}\n🔑 Clave temporal: ${shareTempPass}\n\n(En tu primer ingreso la web te pedirá crear tu contraseña personal). ¡Que lo disfrutes mucho! ✨`;
   };
 
+  // Guardar teléfono modificado desde el modal de WhatsApp
+  const handleSavePhoneFromModal = async () => {
+    if (!shareUser) return;
+    try {
+      const cleanPhone = sharePhone.trim();
+      await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: shareUser.id, phone: cleanPhone }),
+      });
+      setProfiles((prev) =>
+        prev.map((p) => (p.id === shareUser.id ? { ...p, phone: cleanPhone } : p))
+      );
+      setShareUser((prev) => (prev ? { ...prev, phone: cleanPhone } : null));
+    } catch (_) {}
+  };
+
   const handleOpenWhatsApp = () => {
+    // Si cambió o escribió un teléfono en el modal, lo guardamos permanentemente
+    if (shareUser && sharePhone.trim() !== (shareUser.phone || '')) {
+      handleSavePhoneFromModal();
+    }
+
     const text = encodeURIComponent(getWhatsAppMessage());
+    const formattedPhone = formatWhatsAppPhone(sharePhone);
     let url = `https://api.whatsapp.com/send?text=${text}`;
-    if (sharePhone.trim()) {
-      const cleanPhone = sharePhone.replace(/[^0-9]/g, '');
-      url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${text}`;
+    if (formattedPhone) {
+      url = `https://api.whatsapp.com/send?phone=${formattedPhone}&text=${text}`;
     }
     window.open(url, '_blank');
   };
@@ -315,6 +389,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: createEmail,
           fullName: createFullName,
+          phone: createPhone,
           password: tempPass,
           mustChangePassword: createMustChange,
           role: createRole,
@@ -331,16 +406,21 @@ export default function AdminPage() {
         id: data.user?.id || 'temp',
         email: emailToUse,
         full_name: createFullName,
+        phone: createPhone,
         role: createRole,
         must_change_password: createMustChange,
         created_at: new Date().toISOString(),
       };
 
       setShowCreateModal(false);
-      openShareWhatsApp(newCreatedProfile, tempPass);
+      openShareWhatsApp(newCreatedProfile, {
+        mode: 'credentials',
+        tempPass: tempPass,
+      });
 
       setCreateEmail('');
       setCreateFullName('');
+      setCreatePhone('');
       setCreatePassword('123456');
       setCreateMustChange(true);
     } catch (err: any) {
@@ -354,6 +434,7 @@ export default function AdminPage() {
   const openEditUser = (u: Profile) => {
     setEditingUser(u);
     setEditFullName(u.full_name || '');
+    setEditPhone(u.phone || '');
     setEditEmail(u.email || '');
     setEditPassword('');
     setEditMustChange(u.must_change_password || false);
@@ -372,6 +453,7 @@ export default function AdminPage() {
       const payload: any = {
         userId: editingUser.id,
         fullName: editFullName,
+        phone: editPhone,
         newEmail: editEmail !== editingUser.email ? editEmail : undefined,
         role: editRole,
         mustChangePassword: editMustChange,
@@ -399,7 +481,7 @@ export default function AdminPage() {
       setProfiles((prev) =>
         prev.map((p) =>
           p.id === editingUser.id
-            ? { ...p, full_name: editFullName, email: editEmail, role: editRole, must_change_password: editMustChange }
+            ? { ...p, full_name: editFullName, phone: editPhone, email: editEmail, role: editRole, must_change_password: editMustChange }
             : p
         )
       );
@@ -800,9 +882,21 @@ export default function AdminPage() {
                             </span>
                           )}
                         </div>
-                        {p.full_name && (
-                          <p className="text-xs text-stone-500 mt-0.5">{p.full_name}</p>
-                        )}
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          {p.full_name && (
+                            <span className="text-xs text-stone-600 font-medium">{p.full_name}</span>
+                          )}
+                          {p.phone ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-mono bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-md">
+                              <Phone className="w-3 h-3 text-emerald-600" />
+                              <span>{p.phone}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-stone-400 italic">
+                              Sin WhatsApp agendado
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
@@ -813,9 +907,9 @@ export default function AdminPage() {
 
                         {/* Botón WhatsApp */}
                         <button
-                          onClick={() => openShareWhatsApp(p)}
+                          onClick={() => openShareWhatsApp(p, { mode: 'credentials' })}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-sm"
-                          title="Enviar credenciales por WhatsApp"
+                          title="Enviar credenciales o avisos por WhatsApp"
                         >
                           <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
                           <span>WhatsApp</span>
@@ -853,7 +947,7 @@ export default function AdminPage() {
                                   if (hasAccess) {
                                     handleRevokeAccess(p.id, f.id);
                                   } else {
-                                    handleGrantAccess(p.id, f.id);
+                                    handleGrantAccess(p.id, f.id, true);
                                   }
                                 }}
                                 disabled={isAction}
@@ -948,16 +1042,17 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {isPending ? (
                         <>
                           <button
-                            onClick={() => handleGrantAccess(notif.user_id, notif.fanzine_id)}
+                            onClick={() => handleGrantAccess(notif.user_id, notif.fanzine_id, true)}
                             disabled={actionLoading === `${notif.user_id}_${notif.fanzine_id}`}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold shadow-sm transition-all"
+                            title="Aprobar acceso y abrir WhatsApp para avisar al comprador"
                           >
                             <Check className="w-3.5 h-3.5" />
-                            <span>Aprobar y Habilitar</span>
+                            <span>Aprobar y Avisar</span>
                           </button>
                           <button
                             onClick={() => handleRevokeAccess(notif.user_id, notif.fanzine_id)}
@@ -968,10 +1063,29 @@ export default function AdminPage() {
                           </button>
                         </>
                       ) : (
-                        <span className="text-xs text-emerald-700 font-medium flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5" />
-                          <span>Acceso ya otorgado</span>
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Habilitado</span>
+                          </span>
+                          <button
+                            onClick={() => {
+                              const p = notif.profile;
+                              const f = notif.fanzine;
+                              if (p && f) {
+                                openShareWhatsApp(p, {
+                                  mode: 'fanzine_ready',
+                                  fanzineTitle: f.title,
+                                });
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-sm"
+                            title="Reenviar o avisar por WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Avisar WhatsApp</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1038,6 +1152,25 @@ export default function AdminPage() {
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Teléfono / WhatsApp (Opcional)
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="tel"
+                    placeholder="Ej: 11 2345 6789 o +54 9 11..."
+                    value={createPhone}
+                    onChange={(e) => setCreatePhone(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Quedará agendado para enviarle accesos o avisos de fanzines en 1 clic.
+                </p>
               </div>
 
               <div>
@@ -1211,6 +1344,25 @@ export default function AdminPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Teléfono / WhatsApp (Opcional)
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="tel"
+                    placeholder="Ej: 11 2345 6789 o +54 9 11..."
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Puedes agendarlo o actualizarlo para tenerlo listo al mandar mensajes.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Nueva Contraseña (Opcional)
                 </label>
                 <div className="relative">
@@ -1299,7 +1451,7 @@ export default function AdminPage() {
                   <MessageCircle className="w-5 h-5 text-emerald-600" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-stone-900 text-base">Enviar Accesos por WhatsApp</h3>
+                  <h3 className="font-bold text-stone-900 text-base">Enviar por WhatsApp</h3>
                   <p className="text-xs text-stone-500">Para: {shareUser.full_name || shareUser.email}</p>
                 </div>
               </div>
@@ -1313,43 +1465,106 @@ export default function AdminPage() {
               </button>
             </div>
 
+            {/* Pestañas para elegir tipo de mensaje */}
+            <div className="flex rounded-xl bg-stone-100 p-1 mb-4 border border-stone-200">
+              <button
+                type="button"
+                onClick={() => setShareMode('credentials')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  shareMode === 'credentials'
+                    ? 'bg-white text-stone-900 shadow-sm'
+                    : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                🔑 Alta / Credenciales
+              </button>
+              <button
+                type="button"
+                onClick={() => setShareMode('fanzine_ready')}
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                  shareMode === 'fanzine_ready'
+                    ? 'bg-white text-emerald-800 shadow-sm'
+                    : 'text-stone-500 hover:text-stone-800'
+                }`}
+              >
+                🎨 Fanzine Habilitado
+              </button>
+            </div>
+
             <div className="space-y-4">
+              {/* Teléfono / WhatsApp con guardado automático */}
               <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Número de WhatsApp (Opcional)
-                </label>
-                <input
-                  type="tel"
-                  placeholder="Ej: +5491112345678 (o deja vacío para elegir contacto)"
-                  value={sharePhone}
-                  onChange={(e) => setSharePhone(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-stone-700">
+                    Número de WhatsApp
+                  </label>
+                  {sharePhone.trim() && sharePhone.trim() !== (shareUser.phone || '') && (
+                    <span className="text-[10px] text-emerald-600 font-semibold animate-pulse">
+                      ✓ Se agendará en su perfil
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-2.5 text-stone-400" />
+                  <input
+                    type="tel"
+                    placeholder="Ej: 11 2345 6789 o +54 9 11..."
+                    value={sharePhone}
+                    onChange={(e) => setSharePhone(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  {shareUser.phone ? 'Número agendado del comprador. Puedes editarlo aquí si cambió.' : 'Escribe su número aquí y quedará guardado para futuros envíos.'}
+                </p>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Clave Temporal Informada
-                </label>
-                <input
-                  type="text"
-                  value={shareTempPass}
-                  onChange={(e) => setShareTempPass(e.target.value)}
-                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono font-semibold"
-                />
-              </div>
+              {/* Selector si es fanzine habilitado */}
+              {shareMode === 'fanzine_ready' && (
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Fanzine para notificar:
+                  </label>
+                  <select
+                    value={shareFanzineTitle}
+                    onChange={(e) => setShareFanzineTitle(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 bg-white font-medium"
+                  >
+                    {fanzines.map((f) => (
+                      <option key={f.id} value={f.title}>
+                        {f.title} (${f.price})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Clave temporal si es credenciales */}
+              {shareMode === 'credentials' && (
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Clave Temporal Informada
+                  </label>
+                  <input
+                    type="text"
+                    value={shareTempPass}
+                    onChange={(e) => setShareTempPass(e.target.value)}
+                    className="w-full px-3.5 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono font-semibold"
+                  />
+                </div>
+              )}
 
               {/* Mensaje formateado listo */}
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Vista previa del mensaje a enviar:
+                  Vista previa del mensaje:
                 </label>
                 <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs text-stone-700 whitespace-pre-wrap font-sans leading-relaxed">
                   {getWhatsAppMessage()}
                 </div>
               </div>
 
-              <div className="pt-3 flex flex-col sm:flex-row items-center gap-2">
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-2">
                 <button
                   type="button"
                   onClick={handleCopyShare}

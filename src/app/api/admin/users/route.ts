@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { email, password = '123456', fullName, mustChangePassword = true, role = 'user' } = body;
+    const { email, password = '123456', fullName, phone, mustChangePassword = true, role = 'user' } = body;
 
     if (!email) {
       return NextResponse.json({ error: 'El correo o nombre de usuario es obligatorio' }, { status: 400 });
@@ -100,17 +100,19 @@ export async function POST(request: NextRequest) {
       email_confirm: true,
       user_metadata: {
         full_name: fullName || email.split('@')[0],
+        phone: phone ? phone.trim() : null,
         must_change_password: mustChangePassword,
       },
     });
 
     if (createError) throw createError;
 
-    // Crear registro en profiles con el flag must_change_password
+    // Crear registro en profiles con el flag must_change_password y phone
     const { error: pError } = await admin.from('profiles').upsert({
       id: createdUser.user.id,
       email: emailToUse,
       full_name: fullName || email.split('@')[0],
+      phone: phone ? phone.trim() : null,
       role: role,
       must_change_password: mustChangePassword,
     });
@@ -146,7 +148,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { userId, newPassword, newEmail, fullName, role, mustChangePassword } = body;
+    const { userId, newPassword, newEmail, fullName, phone, role, mustChangePassword } = body;
 
     if (!userId) {
       return NextResponse.json({ error: 'ID de usuario requerido' }, { status: 400 });
@@ -165,9 +167,10 @@ export async function PATCH(request: NextRequest) {
       authUpdates.email_confirm = true;
     }
 
-    if (fullName !== undefined || mustChangePassword !== undefined) {
+    if (fullName !== undefined || phone !== undefined || mustChangePassword !== undefined) {
       authUpdates.user_metadata = {
         ...(fullName !== undefined ? { full_name: fullName } : {}),
+        ...(phone !== undefined ? { phone: phone ? phone.trim() : null } : {}),
         ...(mustChangePassword !== undefined ? { must_change_password: mustChangePassword } : {}),
       };
     }
@@ -181,6 +184,7 @@ export async function PATCH(request: NextRequest) {
     // 2. Actualizar en tabla profiles
     const profileUpdates: any = {};
     if (fullName !== undefined) profileUpdates.full_name = fullName;
+    if (phone !== undefined) profileUpdates.phone = phone ? phone.trim() : null;
     if (newEmail) profileUpdates.email = newEmail;
     if (role && (role === 'admin' || role === 'user')) profileUpdates.role = role;
     if (mustChangePassword !== undefined) profileUpdates.must_change_password = mustChangePassword;
