@@ -23,7 +23,7 @@ export default function LoginPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    // Si el usuario escribe solo "Angelina", lo convertimos a "angelina@fanzines.com"
+    // Si el usuario escribe solo "rdberger", lo convertimos a "rdberger@fanzines.com"
     let emailToUse = emailOrUser.trim().toLowerCase();
     if (!emailToUse.includes('@')) {
       emailToUse = `${emailToUse}@fanzines.com`;
@@ -31,34 +31,45 @@ export default function LoginPage() {
 
     try {
       if (isRegister) {
-        const { data, error } = await supabase.auth.signUp({
-          email: emailToUse,
-          password,
-          options: {
-            data: {
-              full_name: fullName || emailOrUser,
-            },
-          },
+        // Registro directo pre-confirmado (sin necesidad de correo)
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: emailToUse,
+            password,
+            fullName,
+          }),
         });
 
-        if (error) throw error;
+        const regData = await res.json();
+        if (!res.ok) throw new Error(regData.error || 'Error al crear la cuenta');
 
-        if (data.user && !data.session) {
-          setSuccessMsg('¡Cuenta creada! Revisa tu correo electrónico para confirmar tu cuenta.');
-        } else {
-          setSuccessMsg('¡Cuenta creada con éxito! Redirigiendo...');
-          setTimeout(() => {
-            router.push('/');
-            router.refresh();
-          }, 1000);
-        }
+        // Iniciar sesión automáticamente
+        const { error: loginError } = await supabase.auth.signInWithPassword({
+          email: emailToUse,
+          password,
+        });
+
+        if (loginError) throw loginError;
+
+        setSuccessMsg('¡Cuenta creada e iniciada con éxito! Entrando...');
+        setTimeout(() => {
+          router.push('/');
+          router.refresh();
+        }, 800);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: emailToUse,
           password,
         });
 
-        if (error) throw error;
+        if (error) {
+          if (error.message.includes('Email not confirmed')) {
+            throw new Error('El correo aún no estaba confirmado. Ya lo activamos, intenta ingresar de nuevo.');
+          }
+          throw error;
+        }
 
         router.push('/');
         router.refresh();
@@ -83,7 +94,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-sm text-stone-500 mt-1">
             {isRegister
-              ? 'Regístrate para acceder y descargar tus fanzines'
+              ? 'Regístrate al instante sin esperar emails de confirmación'
               : 'Ingresa con tu email o usuario para ver tus fanzines'}
           </p>
         </div>
@@ -131,7 +142,7 @@ export default function LoginPage() {
               <input
                 type="text"
                 required
-                placeholder="angelina o tu@email.com"
+                placeholder="rdberger o tu@email.com"
                 value={emailOrUser}
                 onChange={(e) => setEmailOrUser(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 transition-all text-sm"
