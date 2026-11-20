@@ -61,22 +61,31 @@ export async function GET(
     }
 
     // 4. Generar URL firmada de 60 segundos
+    // Si viene ?action=download forzamos la descarga del archivo con cabecera attachment.
+    // Si no viene o es para lectura, se genera inline (sin cabecera attachment) para permitir visualización directa.
+    const isDownload = request.nextUrl.searchParams.get('action') === 'download';
     const fileName = `${fanzine.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
+    
     const { data: signedData, error: signError } = await adminClient.storage
       .from('fanzines-private')
-      .createSignedUrl(fanzine.pdf_path, 60, {
-        download: fileName,
-      });
+      .createSignedUrl(
+        fanzine.pdf_path,
+        60,
+        isDownload ? { download: fileName } : undefined
+      );
 
     if (signError || !signedData?.signedUrl) {
       console.error('Error generando URL firmada:', signError);
       return NextResponse.json(
-        { error: 'No se pudo generar el enlace de descarga seguro.' },
+        { error: 'No se pudo generar el enlace de acceso seguro.' },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ downloadUrl: signedData.signedUrl });
+    return NextResponse.json({
+      downloadUrl: signedData.signedUrl,
+      title: fanzine.title,
+    });
   } catch (error: any) {
     console.error('Download error:', error);
     return NextResponse.json(
