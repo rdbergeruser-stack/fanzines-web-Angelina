@@ -1,0 +1,22 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    # Corre cada 6 horas (4 veces al día: 00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub si se desea
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Keep-Alive Endpoint
+        run: |
+          echo "Haciendo ping a Supabase para mantenerla activa..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" "https://fanzines-angelina.vercel.app/api/ping")
+          echo "$RESPONSE"
+          if echo "$RESPONSE" | grep -q "HTTP_STATUS:200"; then
+            echo "Ping exitoso. La base de datos sigue despierta y activa."
+          else
+            echo "Aviso: la respuesta no fue 200 OK."
+          fi
