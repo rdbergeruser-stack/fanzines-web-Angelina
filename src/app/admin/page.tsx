@@ -22,6 +22,11 @@ import {
   Sparkles,
   Check,
   RefreshCw,
+  Edit,
+  Key,
+  Lock,
+  Mail,
+  User,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -52,6 +57,15 @@ export default function AdminPage() {
   const [searchUser, setSearchUser] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Modal para editar usuario / contraseña
+  const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [editFullName, setEditFullName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
+  const [savingUser, setSavingUser] = useState(false);
+  const [userModalMsg, setUserModalMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
   const loadAdminData = async () => {
     setLoading(true);
     setErrorMessage(null);
@@ -66,7 +80,7 @@ export default function AdminPage() {
       const isAngelina = user.email?.includes('angelina');
 
       // Verificar rol admin en base de datos
-      const { data: profile, error: pErr } = await supabase
+      const { data: profile } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', user.id)
@@ -81,12 +95,11 @@ export default function AdminPage() {
       setIsAdmin(true);
 
       // Cargar fanzines
-      const { data: fList, error: fErr } = await supabase
+      const { data: fList } = await supabase
         .from('fanzines')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (fErr) console.warn('Error fanzines:', fErr.message);
       setFanzines(fList || []);
 
       // Cargar usuarios y accesos via API admin
@@ -99,7 +112,7 @@ export default function AdminPage() {
       } else {
         console.error('Error admin users API:', uData.error);
         if (uData.error?.includes('permission denied')) {
-          setErrorMessage('Faltan otorgar permisos en la base de datos de Supabase. Revisa las instrucciones en pantalla.');
+          setErrorMessage('Faltan otorgar permisos en la base de datos de Supabase.');
         }
       }
     } catch (e: any) {
@@ -234,6 +247,83 @@ export default function AdminPage() {
     }
   };
 
+  // Abrir modal de edición de usuario
+  const openEditUser = (u: Profile) => {
+    setEditingUser(u);
+    setEditFullName(u.full_name || '');
+    setEditEmail(u.email || '');
+    setEditPassword('');
+    setEditRole(u.role || 'user');
+    setUserModalMsg(null);
+  };
+
+  // Guardar edición de usuario (contraseña, nombre, etc.)
+  const handleSaveUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setSavingUser(true);
+    setUserModalMsg(null);
+
+    try {
+      const payload: any = {
+        userId: editingUser.id,
+        fullName: editFullName,
+        newEmail: editEmail !== editingUser.email ? editEmail : undefined,
+        role: editRole,
+      };
+
+      if (editPassword.trim()) {
+        if (editPassword.length < 6) {
+          throw new Error('La contraseña debe tener al menos 6 caracteres');
+        }
+        payload.newPassword = editPassword;
+      }
+
+      const res = await fetch('/api/admin/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar usuario');
+
+      setUserModalMsg({ type: 'ok', text: '¡Usuario y contraseña actualizados correctamente!' });
+      
+      // Actualizar estado local
+      setProfiles((prev) =>
+        prev.map((p) =>
+          p.id === editingUser.id
+            ? { ...p, full_name: editFullName, email: editEmail, role: editRole }
+            : p
+        )
+      );
+
+      setTimeout(() => {
+        setEditingUser(null);
+      }, 1200);
+    } catch (err: any) {
+      setUserModalMsg({ type: 'err', text: err.message || 'Error al guardar' });
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  // Eliminar usuario
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`¿Estás segura de eliminar permanentemente la cuenta de ${email}?`)) return;
+
+    try {
+      const res = await fetch(`/api/admin/users?id=${userId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar');
+
+      setProfiles((prev) => prev.filter((p) => p.id !== userId));
+      setEditingUser(null);
+    } catch (e: any) {
+      alert(e.message || 'Error al eliminar usuario');
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-16 text-center">
@@ -290,20 +380,17 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* ALERTA DE PERMISOS SI APLICA */}
         {errorMessage && (
           <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-1">
             <p className="font-bold flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
               <span>Aviso de Permisos en Supabase</span>
             </p>
-            <p className="text-amber-800">
-              {errorMessage}
-            </p>
+            <p className="text-amber-800">{errorMessage}</p>
           </div>
         )}
 
-        {/* PESTAÑAS PRINCIPALES (GRANDES Y CLARAS) */}
+        {/* PESTAÑAS PRINCIPALES */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
           <button
             onClick={() => setActiveTab('fanzines')}
@@ -535,7 +622,7 @@ export default function AdminPage() {
             <div>
               <h2 className="text-xl font-bold text-stone-900">Usuarios Registrados y Sus Fanzines</h2>
               <p className="text-xs text-stone-500">
-                Selecciona cualquier usuario para habilitarle o retirarle el acceso a cualquiera de tus fanzines.
+                Administra usuarios, modifica sus datos o contraseñas, y habilítales sus fanzines.
               </p>
             </div>
 
@@ -566,7 +653,7 @@ export default function AdminPage() {
 
                 return (
                   <div key={p.id} className="p-5 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-stone-900 text-sm">{p.email}</span>
@@ -585,11 +672,20 @@ export default function AdminPage() {
                         )}
                       </div>
 
-                      <div className="text-xs text-stone-500">
-                        Fanzines habilitados:{' '}
-                        <span className="font-semibold text-stone-800">
-                          {userAccessList.length}
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-stone-500">
+                          Habilitados:{' '}
+                          <strong className="text-stone-800">{userAccessList.length}</strong>
                         </span>
+
+                        {/* Botón para editar usuario y contraseña */}
+                        <button
+                          onClick={() => openEditUser(p)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 hover:border-brand-300 hover:bg-brand-50 text-stone-700 hover:text-brand-700 text-xs font-semibold transition-all shadow-sm"
+                        >
+                          <Key className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Editar / Clave</span>
+                        </button>
                       </div>
                     </div>
 
@@ -740,6 +836,146 @@ export default function AdminPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* MODAL: EDITAR USUARIO Y CONTRASEÑA */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Editar Usuario</h3>
+                  <p className="text-xs text-stone-500 truncate max-w-[240px]">{editingUser.email}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {userModalMsg && (
+              <div
+                className={`mb-4 p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  userModalMsg.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {userModalMsg.type === 'ok' ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                )}
+                <span>{userModalMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveUser} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nombre o Alias
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="text"
+                    value={editFullName}
+                    onChange={(e) => setEditFullName(e.target.value)}
+                    placeholder="Nombre completo"
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Correo Electrónico
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nueva Contraseña (Opcional)
+                </label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-3 text-stone-400" />
+                  <input
+                    type="text"
+                    placeholder="Dejar en blanco si no quieres cambiarla"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    minLength={6}
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                  />
+                </div>
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Si el cliente se olvidó su clave, puedes escribirle aquí una nueva (mínimo 6 caracteres).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Rol del Usuario
+                </label>
+                <select
+                  value={editRole}
+                  onChange={(e) => setEditRole(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 bg-white"
+                >
+                  <option value="user">Cliente estándar (user)</option>
+                  <option value="admin">Administrador (admin)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteUser(editingUser.id, editingUser.email)}
+                  className="p-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors"
+                  title="Eliminar usuario permanentemente"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingUser(null)}
+                    className="py-2 px-3 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingUser}
+                    className="py-2 px-4 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                  >
+                    {savingUser ? 'Guardando...' : 'Guardar Cambios'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
