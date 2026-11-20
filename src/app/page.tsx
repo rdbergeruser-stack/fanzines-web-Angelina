@@ -31,7 +31,6 @@ export default function HomePage() {
   const [referenceCode, setReferenceCode] = useState('');
   const [notifying, setNotifying] = useState(false);
   const [notifySuccess, setNotifySuccess] = useState(false);
-  const [copiedAlias, setCopiedAlias] = useState(false);
 
   const paymentInfo = process.env.NEXT_PUBLIC_PAYMENT_INFO || 'Alias: angelina.fanzines | CBU: 0000003100010000000000';
 
@@ -123,12 +122,6 @@ export default function HomePage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedAlias(true);
-    setTimeout(() => setCopiedAlias(false), 2000);
-  };
-
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12">
       {/* Hero Section */}
@@ -141,28 +134,8 @@ export default function HomePage() {
           Historias y arte en formato <span className="text-brand-600">PDF</span>
         </h1>
         <p className="mt-4 text-base sm:text-lg text-stone-600 leading-relaxed">
-          Explora los fanzines, apoya el trabajo independiente mediante transferencia directa y descárgalos para siempre en tu biblioteca digital.
+          Explora los fanzines, apoya el trabajo independiente y descárgalos directamente en formato PDF para disfrutar en cualquier pantalla.
         </p>
-
-        {/* Banner de datos de transferencia */}
-        <div className="mt-6 p-4 rounded-2xl bg-stone-50 border border-stone-200/80 text-left sm:text-center text-sm">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-stone-700">
-              <CreditCard className="w-4 h-4 text-brand-600 flex-shrink-0" />
-              <span className="font-medium text-xs sm:text-sm">Datos para transferir:</span>
-              <code className="bg-white px-2 py-1 rounded-lg border border-stone-200 text-xs font-mono font-semibold text-stone-900">
-                {paymentInfo}
-              </code>
-            </div>
-            <button
-              onClick={() => copyToClipboard(paymentInfo)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:text-brand-900 bg-white px-3 py-1.5 rounded-lg border border-stone-200 hover:border-brand-200 transition-colors"
-            >
-              {copiedAlias ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copiedAlias ? 'Copiado' : 'Copiar datos'}</span>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Catálogo de Fanzines */}
