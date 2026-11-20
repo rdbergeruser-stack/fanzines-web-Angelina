@@ -27,6 +27,10 @@ import {
   Mail,
   User,
   UserPlus,
+  Share2,
+  Copy,
+  MessageCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -76,6 +80,12 @@ export default function AdminPage() {
   const [editRole, setEditRole] = useState<'admin' | 'user'>('user');
   const [savingUser, setSavingUser] = useState(false);
   const [userModalMsg, setUserModalMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Modal para COMPARTIR credenciales por WhatsApp
+  const [shareUser, setShareUser] = useState<Profile | null>(null);
+  const [shareTempPass, setShareTempPass] = useState('123456');
+  const [sharePhone, setSharePhone] = useState('');
+  const [copiedShare, setCopiedShare] = useState(false);
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -258,11 +268,45 @@ export default function AdminPage() {
     }
   };
 
+  // Abrir modal de compartir WhatsApp
+  const openShareWhatsApp = (u: Profile, defaultPass: string = '123456') => {
+    setShareUser(u);
+    setShareTempPass(defaultPass);
+    setSharePhone('');
+    setCopiedShare(false);
+  };
+
+  const getWhatsAppMessage = () => {
+    if (!shareUser) return '';
+    const cleanUser = shareUser.email.replace('@fanzines.com', '');
+    const name = shareUser.full_name || 'hola';
+    return `¡Hola ${name}! Ya tienes listo tu acceso a Angelina Fanzines para leer y descargar tus publicaciones.\n\n🌐 Entra en: https://fanzines-angelina.vercel.app/login\n👤 Usuario: ${cleanUser}\n🔑 Clave temporal: ${shareTempPass}\n\n(En tu primer ingreso la web te pedirá crear tu contraseña personal). ¡Que lo disfrutes mucho! ✨`;
+  };
+
+  const handleOpenWhatsApp = () => {
+    const text = encodeURIComponent(getWhatsAppMessage());
+    let url = `https://api.whatsapp.com/send?text=${text}`;
+    if (sharePhone.trim()) {
+      const cleanPhone = sharePhone.replace(/[^0-9]/g, '');
+      url = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${text}`;
+    }
+    window.open(url, '_blank');
+  };
+
+  const handleCopyShare = () => {
+    navigator.clipboard.writeText(getWhatsAppMessage());
+    setCopiedShare(true);
+    setTimeout(() => setCopiedShare(false), 2000);
+  };
+
   // Crear usuario manualmente
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreatingUser(true);
     setCreateMsg(null);
+
+    const emailToUse = createEmail.includes('@') ? createEmail.trim().toLowerCase() : `${createEmail.trim().toLowerCase()}@fanzines.com`;
+    const tempPass = createPassword || '123456';
 
     try {
       const res = await fetch('/api/admin/users', {
@@ -271,7 +315,7 @@ export default function AdminPage() {
         body: JSON.stringify({
           email: createEmail,
           fullName: createFullName,
-          password: createPassword || '123456',
+          password: tempPass,
           mustChangePassword: createMustChange,
           role: createRole,
         }),
@@ -280,16 +324,25 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al crear el usuario');
 
-      setCreateMsg({ type: 'ok', text: '¡Usuario creado con éxito! Ya puede iniciar sesión.' });
       await loadAdminData();
 
-      setTimeout(() => {
-        setShowCreateModal(false);
-        setCreateEmail('');
-        setCreateFullName('');
-        setCreatePassword('123456');
-        setCreateMustChange(true);
-      }, 1200);
+      // Abrir automáticamente el modal de WhatsApp con los datos recién creados
+      const newCreatedProfile: Profile = {
+        id: data.user?.id || 'temp',
+        email: emailToUse,
+        full_name: createFullName,
+        role: createRole,
+        must_change_password: createMustChange,
+        created_at: new Date().toISOString(),
+      };
+
+      setShowCreateModal(false);
+      openShareWhatsApp(newCreatedProfile, tempPass);
+
+      setCreateEmail('');
+      setCreateFullName('');
+      setCreatePassword('123456');
+      setCreateMustChange(true);
     } catch (err: any) {
       setCreateMsg({ type: 'err', text: err.message || 'Error al crear usuario' });
     } finally {
@@ -419,7 +472,7 @@ export default function AdminPage() {
             </div>
             <h1 className="text-3xl font-extrabold text-stone-900">Administración de Fanzines</h1>
             <p className="text-sm text-stone-600 mt-1">
-              Sube tus fanzines en PDF, crea usuarios para tus clientes y habilita sus descargas.
+              Sube tus fanzines en PDF, crea usuarios para tus clientes y pásales sus credenciales por WhatsApp.
             </p>
           </div>
 
@@ -752,11 +805,21 @@ export default function AdminPage() {
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-stone-500">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-stone-500 mr-1">
                           Habilitados:{' '}
                           <strong className="text-stone-800">{userAccessList.length}</strong>
                         </span>
+
+                        {/* Botón WhatsApp */}
+                        <button
+                          onClick={() => openShareWhatsApp(p)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-sm"
+                          title="Enviar credenciales por WhatsApp"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>WhatsApp</span>
+                        </button>
 
                         {/* Botón para editar usuario y contraseña */}
                         <button
@@ -1064,7 +1127,7 @@ export default function AdminPage() {
                   disabled={creatingUser}
                   className="py-2.5 px-4 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
                 >
-                  {creatingUser ? 'Creando usuario...' : 'Crear Usuario'}
+                  {creatingUser ? 'Creando...' : 'Crear y Continuar a WhatsApp'}
                 </button>
               </div>
             </form>
@@ -1222,6 +1285,99 @@ export default function AdminPage() {
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: COMPARTIR POR WHATSAPP */}
+      {shareUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200">
+                  <MessageCircle className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Enviar Accesos por WhatsApp</h3>
+                  <p className="text-xs text-stone-500">Para: {shareUser.full_name || shareUser.email}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShareUser(null)}
+                className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Número de WhatsApp (Opcional)
+                </label>
+                <input
+                  type="tel"
+                  placeholder="Ej: +5491112345678 (o deja vacío para elegir contacto)"
+                  value={sharePhone}
+                  onChange={(e) => setSharePhone(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Clave Temporal Informada
+                </label>
+                <input
+                  type="text"
+                  value={shareTempPass}
+                  onChange={(e) => setShareTempPass(e.target.value)}
+                  className="w-full px-3.5 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono font-semibold"
+                />
+              </div>
+
+              {/* Mensaje formateado listo */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Vista previa del mensaje a enviar:
+                </label>
+                <div className="p-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-xs text-stone-700 whitespace-pre-wrap font-sans leading-relaxed">
+                  {getWhatsAppMessage()}
+                </div>
+              </div>
+
+              <div className="pt-3 flex flex-col sm:flex-row items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyShare}
+                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl border border-stone-300 hover:bg-stone-50 text-stone-700 text-xs font-semibold transition-all flex items-center justify-center gap-1.5"
+                >
+                  {copiedShare ? (
+                    <>
+                      <Check className="w-4 h-4 text-emerald-600" />
+                      <span className="text-emerald-700">¡Mensaje Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4 text-stone-500" />
+                      <span>Copiar Texto</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenWhatsApp}
+                  className="w-full sm:w-1/2 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1.5"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Abrir WhatsApp</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

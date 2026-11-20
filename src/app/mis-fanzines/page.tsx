@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Fanzine } from '@/types/database';
-import { Download, BookOpen, Clock, AlertCircle, ArrowLeft, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Download, BookOpen, Clock, ArrowLeft, Sparkles, CheckCircle2, Eye } from 'lucide-react';
 
 interface AccessItem {
   id: string;
@@ -53,7 +53,6 @@ export default function MisFanzinesPage() {
       const res = await fetch(`/api/download/${fanzineId}`);
       const data = await res.json();
       if (data.downloadUrl) {
-        // Abrir o forzar descarga
         const a = document.createElement('a');
         a.href = data.downloadUrl;
         a.download = '';
@@ -86,7 +85,7 @@ export default function MisFanzinesPage() {
           </Link>
           <h1 className="text-3xl font-extrabold text-stone-900 tracking-tight">Mis Fanzines</h1>
           <p className="text-sm text-stone-600 mt-1">
-            Tu biblioteca digital. Puedes descargar tus fanzines en PDF cuantas veces quieras.
+            Tu biblioteca digital. Puedes leerlos directamente en pantalla o descargarte el PDF.
           </p>
         </div>
       </div>
@@ -105,7 +104,7 @@ export default function MisFanzinesPage() {
           <BookOpen className="w-12 h-12 text-stone-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-stone-800">Aún no tienes fanzines habilitados</h3>
           <p className="text-sm text-stone-500 mt-2 mb-6">
-            Pasa por nuestro catálogo para ver las publicaciones disponibles y solicita la tuya.
+            Pasa por nuestro catálogo para ver las publicaciones disponibles o comunícate con Angelina para que te habilite tu ejemplar.
           </p>
           <Link
             href="/"
@@ -122,21 +121,21 @@ export default function MisFanzinesPage() {
             <div>
               <h2 className="text-xl font-bold text-stone-900 mb-4 flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <span>Listos para Descargar ({approved.length})</span>
+                <span>Mis Lecturas Disponibles ({approved.length})</span>
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {approved.map((item) => (
                   <div
                     key={item.id}
-                    className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col"
+                    className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col group"
                   >
-                    <div className="relative aspect-[3/4] bg-stone-100">
+                    <Link href={`/leer/${item.fanzine.id}`} className="relative aspect-[3/4] bg-stone-100 overflow-hidden block">
                       {item.fanzine.cover_url ? (
                         <img
                           src={item.fanzine.cover_url}
                           alt={item.fanzine.title}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-stone-400 p-6">
@@ -144,11 +143,22 @@ export default function MisFanzinesPage() {
                           <span className="text-xs">Sin portada</span>
                         </div>
                       )}
-                    </div>
+                      
+                      <div className="absolute inset-0 bg-stone-900/0 group-hover:bg-stone-900/20 transition-colors flex items-center justify-center">
+                        <span className="opacity-0 group-hover:opacity-100 bg-white/95 text-stone-900 font-semibold text-xs px-3 py-1.5 rounded-full shadow-lg transition-opacity flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-brand-600" />
+                          <span>Abrir lector</span>
+                        </span>
+                      </div>
+                    </Link>
 
                     <div className="p-5 flex-1 flex flex-col justify-between">
                       <div>
-                        <h3 className="font-bold text-stone-900 leading-snug">{item.fanzine.title}</h3>
+                        <Link href={`/leer/${item.fanzine.id}`}>
+                          <h3 className="font-bold text-stone-900 leading-snug hover:text-brand-600 transition-colors">
+                            {item.fanzine.title}
+                          </h3>
+                        </Link>
                         {item.fanzine.description && (
                           <p className="text-xs text-stone-500 mt-1 line-clamp-2">
                             {item.fanzine.description}
@@ -156,15 +166,24 @@ export default function MisFanzinesPage() {
                         )}
                       </div>
 
-                      <div className="mt-5 pt-4 border-t border-stone-100">
+                      {/* Doble botón: Leer online + Descargar */}
+                      <div className="mt-5 pt-4 border-t border-stone-100 grid grid-cols-2 gap-2">
+                        <Link
+                          href={`/leer/${item.fanzine.id}`}
+                          className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 transition-all text-xs"
+                        >
+                          <Eye className="w-4 h-4" />
+                          <span>Leer online</span>
+                        </Link>
+
                         <button
                           onClick={() => handleDownload(item.fanzine.id)}
                           disabled={downloadingId === item.fanzine.id}
-                          className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-medium text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all text-sm disabled:opacity-50"
+                          className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all text-xs disabled:opacity-50"
                         >
                           <Download className="w-4 h-4" />
                           <span>
-                            {downloadingId === item.fanzine.id ? 'Generando descarga...' : 'Descargar PDF'}
+                            {downloadingId === item.fanzine.id ? 'Descargando...' : 'Descargar'}
                           </span>
                         </button>
                       </div>
@@ -206,10 +225,10 @@ export default function MisFanzinesPage() {
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-sm text-stone-900 truncate">{item.fanzine.title}</h4>
                       <p className="text-xs text-amber-700 font-medium mt-1">
-                        Pago en revisión por la administradora
+                        Acceso en preparación por Angelina
                       </p>
                       <p className="text-[11px] text-stone-400 mt-0.5">
-                        Te llegará el acceso apenas se verifique la transferencia.
+                        Apenas lo habilite podrás leerlo o descargarlo aquí.
                       </p>
                     </div>
                   </div>
