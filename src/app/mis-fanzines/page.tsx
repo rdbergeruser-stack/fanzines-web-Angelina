@@ -50,7 +50,7 @@ export default function MisFanzinesPage() {
   const handleDownload = async (fanzineId: string) => {
     setDownloadingId(fanzineId);
     try {
-      const res = await fetch(`/api/download/${fanzineId}`);
+      const res = await fetch(`/api/download/${fanzineId}?action=download`);
       const data = await res.json();
       if (data.downloadUrl) {
         const a = document.createElement('a');
