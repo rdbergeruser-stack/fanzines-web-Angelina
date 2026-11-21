@@ -6,8 +6,8 @@ import Navbar from '@/components/Navbar';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Angelina Fanzines - Tienda y Descargas',
-  description: 'Descarga tus fanzines favoritos en PDF de manera segura y directa.',
+  title: 'Angelina Fanzines - Tienda y Lector Online',
+  description: 'Disfruta y lee tus fanzines favoritos directamente en pantalla de manera segura.',
 };
 
 export default function RootLayout({

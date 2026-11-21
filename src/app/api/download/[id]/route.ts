@@ -60,19 +60,11 @@ export async function GET(
       return NextResponse.json({ error: 'Fanzine o archivo no encontrado' }, { status: 404 });
     }
 
-    // 4. Generar URL firmada de 60 segundos
-    // Si viene ?action=download forzamos la descarga del archivo con cabecera attachment.
-    // Si no viene o es para lectura, se genera inline (sin cabecera attachment) para permitir visualización directa.
-    const isDownload = request.nextUrl.searchParams.get('action') === 'download';
-    const fileName = `${fanzine.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`;
-    
+    // 4. Generar URL firmada de 60 segundos exclusiva para lectura online
+    // Se genera inline (sin cabecera attachment) para permitir única y exclusivamente la visualización en el lector interactivo.
     const { data: signedData, error: signError } = await adminClient.storage
       .from('fanzines-private')
-      .createSignedUrl(
-        fanzine.pdf_path,
-        60,
-        isDownload ? { download: fileName } : undefined
-      );
+      .createSignedUrl(fanzine.pdf_path, 60);
 
     if (signError || !signedData?.signedUrl) {
       console.error('Error generando URL firmada:', signError);

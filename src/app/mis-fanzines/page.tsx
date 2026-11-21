@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Fanzine } from '@/types/database';
-import { Download, BookOpen, Clock, ArrowLeft, Sparkles, CheckCircle2, Eye } from 'lucide-react';
+import { BookOpen, Clock, ArrowLeft, Sparkles, CheckCircle2, Eye } from 'lucide-react';
 
 interface AccessItem {
   id: string;
@@ -19,7 +19,6 @@ export default function MisFanzinesPage() {
   const supabase = createClient();
   const [items, setItems] = useState<AccessItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchMyFanzines() {
@@ -47,28 +46,6 @@ export default function MisFanzinesPage() {
     fetchMyFanzines();
   }, [supabase, router]);
 
-  const handleDownload = async (fanzineId: string) => {
-    setDownloadingId(fanzineId);
-    try {
-      const res = await fetch(`/api/download/${fanzineId}?action=download`);
-      const data = await res.json();
-      if (data.downloadUrl) {
-        const a = document.createElement('a');
-        a.href = data.downloadUrl;
-        a.download = '';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        alert(data.error || 'No se pudo descargar el fanzine');
-      }
-    } catch (e) {
-      alert('Error en la descarga');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
-
   const approved = items.filter((i) => i.status === 'approved' && i.fanzine);
   const pending = items.filter((i) => i.status === 'pending' && i.fanzine);
 
@@ -85,7 +62,7 @@ export default function MisFanzinesPage() {
           </Link>
           <h1 className="text-3xl font-extrabold text-stone-900 tracking-tight">Mis Fanzines</h1>
           <p className="text-sm text-stone-600 mt-1">
-            Tu biblioteca digital. Puedes leerlos directamente en pantalla o descargarte el PDF.
+            Tu biblioteca digital. Lee tus publicaciones adquiridas directamente en pantalla desde cualquier celular o computadora.
           </p>
         </div>
       </div>
@@ -166,26 +143,15 @@ export default function MisFanzinesPage() {
                         )}
                       </div>
 
-                      {/* Doble botón: Leer online + Descargar */}
-                      <div className="mt-5 pt-4 border-t border-stone-100 grid grid-cols-2 gap-2">
+                      {/* Botón único: Leer online */}
+                      <div className="mt-5 pt-4 border-t border-stone-100">
                         <Link
                           href={`/leer/${item.fanzine.id}`}
-                          className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 transition-all text-xs"
+                          className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-md shadow-brand-500/15 transition-all text-xs"
                         >
                           <Eye className="w-4 h-4" />
-                          <span>Leer online</span>
+                          <span>Abrir Lector Online</span>
                         </Link>
-
-                        <button
-                          onClick={() => handleDownload(item.fanzine.id)}
-                          disabled={downloadingId === item.fanzine.id}
-                          className="inline-flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition-all text-xs disabled:opacity-50"
-                        >
-                          <Download className="w-4 h-4" />
-                          <span>
-                            {downloadingId === item.fanzine.id ? 'Descargando...' : 'Descargar'}
-                          </span>
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -228,7 +194,7 @@ export default function MisFanzinesPage() {
                         Acceso en preparación por Angelina
                       </p>
                       <p className="text-[11px] text-stone-400 mt-0.5">
-                        Apenas lo habilite podrás leerlo o descargarlo aquí.
+                        Apenas lo habilite podrás leerlo directamente aquí.
                       </p>
                     </div>
                   </div>

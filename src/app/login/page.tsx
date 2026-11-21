@@ -71,7 +71,7 @@ export default function LoginPage() {
             Acceso a Fanzines
           </h1>
           <p className="text-sm text-stone-500 mt-2 leading-relaxed">
-            Ingresa con los datos de acceso que te proporcionó Angelina para ver y descargar tus publicaciones.
+            Ingresa con los datos de acceso que te proporcionó Angelina para leer tus publicaciones en línea.
           </p>
         </div>
 

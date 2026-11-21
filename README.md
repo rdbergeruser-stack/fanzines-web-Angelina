@@ -16,7 +16,7 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
   * Toca los bordes de la pantalla para avanzar o retroceder.
   * Barra inferior flotante con navegación y contador: `Página X de Y`.
   * **Auto-ajuste:** Optimizado para pantallas móviles HD y Retina.
-* **Controles adicionales:** Botones de Zoom (+ / -), modo auto, pantalla completa y botón de descarga opcional para usuarios que deseen guardar el PDF.
+* **Controles y Protección de Obra:** Botones de Zoom (+ / -), modo auto, pantalla completa y bloqueo de clic derecho. **Modalidad 100% lectura online:** se elimina la descarga directa del archivo PDF para proteger los derechos y autoría de Angelina, impidiendo la distribución no autorizada del archivo digital.
 
 ### 2. 📱 Integración con WhatsApp y Agenda de Compradores
 * **Agenda integrada:** Guarda el número de teléfono/WhatsApp en el perfil de cada usuario al crearlo o editarlo.
@@ -34,10 +34,8 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
 
 ### 4. 🛡️ Almacenamiento Privado y Seguridad de Archivos
 * **Bucket Privado (`fanzines-private`):** Los archivos PDF completos nunca son accesibles mediante URLs públicas.
-* **URLs Firmadas de 60 segundos:** Solo los usuarios autenticados con acceso aprobado o la administradora pueden solicitar enlaces de lectura o descarga temporales que expiran en un minuto.
-* **Cabeceras HTTP diferenciadas:**
-  * Modo lectura online: `Content-Disposition: inline` (no dispara descarga en navegadores).
-  * Modo descarga: `Content-Disposition: attachment` con el nombre del fanzine sanitizado.
+* **URLs Firmadas de 60 segundos:** Solo los usuarios autenticados con acceso aprobado o la administradora pueden solicitar enlaces de lectura temporales que expiran en un minuto.
+* **Cabeceras HTTP de Lectura:** Se sirven con `Content-Disposition: inline` para alimentar exclusivamente el visor interactivo de la aplicación.
 
 ### 5. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
 * **Endpoint de ping:** `/api/ping` ejecuta una consulta liviana a la base de datos para mantenerla activa.
@@ -142,4 +140,4 @@ npm run start
 5. **Lectura por parte del cliente:**
    * El cliente entra a [https://fanzines-angelina.vercel.app/login](https://fanzines-angelina.vercel.app/login).
    * La primera vez ingresa su clave temporal y crea su contraseña propia.
-   * En la sección **Mis Fanzines** puede presionar **"Leer online"** para disfrutar el fanzine directamente en pantalla (en móvil o PC) o **"Descargar"** para guardar una copia en PDF.
+   * En la sección **Mis Fanzines** puede presionar **"Abrir Lector Online"** para disfrutar el fanzine directamente en pantalla completa (en móvil o PC) sin descargar el archivo.

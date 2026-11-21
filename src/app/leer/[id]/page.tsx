@@ -11,7 +11,6 @@ import {
   ZoomOut,
   Maximize2,
   Minimize2,
-  Download,
   AlertCircle,
   RefreshCw,
   BookOpen,
@@ -33,7 +32,6 @@ export default function LeerFanzinePage() {
   const [scale, setScale] = useState<number>(1.0);
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [downloading, setDownloading] = useState<boolean>(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -276,29 +274,6 @@ export default function LeerFanzinePage() {
     }
   };
 
-  // Descarga directa cuando el usuario hace clic expresamente en "Descargar PDF"
-  const handleDirectDownload = async () => {
-    setDownloading(true);
-    try {
-      const res = await fetch(`/api/download/${fanzineId}?action=download`);
-      const data = await res.json();
-      if (data.downloadUrl) {
-        const a = document.createElement('a');
-        a.href = data.downloadUrl;
-        a.download = '';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        alert(data.error || 'No se pudo descargar el fanzine');
-      }
-    } catch (e) {
-      alert('Error al descargar el archivo.');
-    } finally {
-      setDownloading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-stone-950 flex flex-col select-none overflow-hidden text-stone-100">
       {/* Barra Superior */}
@@ -323,7 +298,7 @@ export default function LeerFanzinePage() {
           </div>
         </div>
 
-        {/* Controles de Vista y Descarga */}
+        {/* Controles de Vista */}
         <div className="flex items-center gap-1 sm:gap-2">
           {totalPages > 0 && (
             <div className="flex items-center bg-stone-800 rounded-xl p-0.5 border border-stone-700">
@@ -357,20 +332,10 @@ export default function LeerFanzinePage() {
 
           <button
             onClick={toggleFullscreen}
-            className="p-2 text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 rounded-xl transition-colors hidden sm:inline-flex"
+            className="p-2 text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 rounded-xl transition-colors inline-flex"
             title="Pantalla completa"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
-          <button
-            onClick={handleDirectDownload}
-            disabled={downloading}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 px-2.5 py-1.5 rounded-xl shadow-sm transition-colors"
-            title="Descargar archivo PDF completo"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Descargar</span>
           </button>
         </div>
       </header>
@@ -380,7 +345,8 @@ export default function LeerFanzinePage() {
         ref={containerRef}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="flex-1 w-full bg-stone-950 flex items-center justify-center relative overflow-auto p-2 sm:p-4"
+        onContextMenu={(e) => e.preventDefault()}
+        className="flex-1 w-full bg-stone-950 flex items-center justify-center relative overflow-auto p-2 sm:p-4 select-none"
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">

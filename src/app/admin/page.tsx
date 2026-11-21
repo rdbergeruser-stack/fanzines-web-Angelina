@@ -329,10 +329,10 @@ export default function AdminPage() {
     const name = shareUser.full_name || cleanUser;
 
     if (shareMode === 'fanzine_ready') {
-      return `¡Hola ${name}! 🎨 Te aviso que ya tienes habilitado el fanzine "${shareFanzineTitle}" en tu cuenta de Angelina Fanzines.\n\nYa puedes entrar a leerlo en pantalla desde tu celular o descargarte el PDF en tu biblioteca:\n👉 https://fanzines-angelina.vercel.app/mis-fanzines\n\n¡Muchas gracias por apoyar mis publicaciones y que lo disfrutes mucho! ✨`;
+      return `¡Hola ${name}! 🎨 Te aviso que ya tienes habilitado el fanzine "${shareFanzineTitle}" en tu cuenta de Angelina Fanzines.\n\nYa puedes entrar a leerlo directamente en pantalla desde tu celular o computadora en tu biblioteca:\n👉 https://fanzines-angelina.vercel.app/mis-fanzines\n\n¡Muchas gracias por apoyar mis publicaciones y que lo disfrutes mucho! ✨`;
     }
 
-    return `¡Hola ${name}! Ya tienes listo tu acceso a Angelina Fanzines para leer y descargar tus publicaciones.\n\n🌐 Entra en: https://fanzines-angelina.vercel.app/login\n👤 Usuario: ${cleanUser}\n🔑 Clave temporal: ${shareTempPass}\n\n(En tu primer ingreso la web te pedirá crear tu contraseña personal). ¡Que lo disfrutes mucho! ✨`;
+    return `¡Hola ${name}! Ya tienes listo tu acceso a Angelina Fanzines para leer tus publicaciones online.\n\n🌐 Entra en: https://fanzines-angelina.vercel.app/login\n👤 Usuario: ${cleanUser}\n🔑 Clave temporal: ${shareTempPass}\n\n(En tu primer ingreso la web te pedirá crear tu contraseña personal). ¡Que lo disfrutes mucho! ✨`;
   };
 
   // Guardar teléfono modificado desde el modal de WhatsApp
@@ -1242,7 +1242,7 @@ export default function AdminPage() {
                   onChange={(e) => setCreateRole(e.target.value as any)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 bg-white"
                 >
-                  <option value="user">Cliente estándar (solo descarga fanzines habilitados)</option>
+                  <option value="user">Cliente estándar (solo lectura de fanzines habilitados)</option>
                   <option value="admin">Administrador (acceso completo al panel)</option>
                 </select>
               </div>
