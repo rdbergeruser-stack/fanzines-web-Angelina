@@ -1,77 +1,145 @@
-# Angelina Fanzines - Tienda Digital de Fanzines en PDF
+# Angelina Fanzines - Tienda Digital y Lector Online de Fanzines
 
-Sitio web autogestionable para la publicación, venta manual y descarga segura de fanzines en formato PDF. Desarrollado con **Next.js (App Router)**, **Tailwind CSS**, **Supabase** (Auth, Database y Storage con buckets privados) y listo para desplegar en **Vercel**.
+Plataforma autogestionable y segura para la publicación, venta, lectura online y distribución de fanzines independientes en formato PDF. Desarrollada con **Next.js (App Router)**, **TypeScript**, **Tailwind CSS**, **Supabase** (Auth, PostgreSQL DB y Storage privado) y desplegada en **Vercel**.
 
----
-
-## 🚀 Características Principales
-
-1. **Seguridad Total de Archivos (PDFs Privados):**
-   * Los PDFs se almacenan en un bucket privado de Supabase (`fanzines-private`).
-   * No existen URLs públicas de los archivos completos.
-   * La descarga se realiza mediante **URLs firmadas temporales de 60 segundos**, accesibles únicamente por usuarios que tengan el acceso aprobado en la base de datos o por la administradora.
-
-2. **Catálogo y Compra por Transferencia:**
-   * Catálogo de fanzines con portadas, descripciones y precios.
-   * Visualización del CBU/Alias bancario para realizar la transferencia.
-   * Botón para que el comprador notifique su pago y deje un comprobante/referencia.
-
-3. **Zona de Clientes ("Mis Fanzines"):**
-   * Los compradores registrados ven sus publicaciones adquiridas.
-   * Botón de descarga directa del PDF.
-   * Estado de pagos en revisión.
-
-4. **Panel de Control de la Administradora (`/admin`):**
-   * **Subir Fanzine:** Carga el PDF original, la foto de portada, título, descripción y precio.
-   * **Avisos de Pago:** Listado de transferencias informadas por clientes con botón de aprobación en 1 clic.
-   * **Gestión de Usuarios y Accesos:** Buscador de usuarios registrados para habilitar o revocar fanzines con un solo botón.
+🌐 **Sitio en Producción:** [https://fanzines-angelina.vercel.app](https://fanzines-angelina.vercel.app)  
+📦 **Repositorio:** [https://github.com/rdbergeruser-stack/fanzines-web-Angelina.git](https://github.com/rdbergeruser-stack/fanzines-web-Angelina.git)
 
 ---
 
-## 🛠️ Paso 1: Configurar la Base de Datos en Supabase (Solo una vez)
+## ✨ Características Principales
 
-1. Ingresa a tu proyecto en [Supabase](https://supabase.com).
-2. Ve al menú lateral izquierdo y entra en **SQL Editor**.
-3. Haz clic en **New query** (Nueva consulta).
-4. Abre el archivo [`supabase-schema.sql`](./supabase-schema.sql), copia todo su contenido, pégalo en el editor y presiona **Run**.
-5. ¡Listo! Este script crea automáticamente las tablas (`profiles`, `fanzines`, `user_access`, `payment_notifications`), los triggers de nuevos usuarios y las políticas de seguridad (RLS).
-*(Nota: Los buckets de almacenamiento `fanzines-covers` y `fanzines-private` ya fueron creados e inicializados).*
+### 1. 📖 Lector Online Interactivo en Pantalla (HTML5 Canvas + PDF.js)
+* **Lectura directa sin forzar descarga:** Los fanzines se renderizan página por página en pantalla mediante Canvas con el motor de Mozilla PDF.js.
+* **Diseñado para celulares:** 
+  * Soporte de **gestos táctiles (swipe)**: desliza con el dedo hacia la izquierda o derecha para pasar de página.
+  * Toca los bordes de la pantalla para avanzar o retroceder.
+  * Barra inferior flotante con navegación y contador: `Página X de Y`.
+  * **Auto-ajuste:** Optimizado para pantallas móviles HD y Retina.
+* **Controles adicionales:** Botones de Zoom (+ / -), modo auto, pantalla completa y botón de descarga opcional para usuarios que deseen guardar el PDF.
+
+### 2. 📱 Integración con WhatsApp y Agenda de Compradores
+* **Agenda integrada:** Guarda el número de teléfono/WhatsApp en el perfil de cada usuario al crearlo o editarlo.
+* **Auto-guardado inteligente:** Si la administradora escribe o corrige un número directamente en el modal de WhatsApp, se guarda automáticamente en la base de datos.
+* **Formateo internacional automático:** Adapta cualquier formato ingresado (`11 2345-6789`, `011...`, `+54 9 11...`) al estándar internacional exigido por WhatsApp (`54911...`).
+* **Mensajes en 1 clic:**
+  * **Alta y Credenciales:** Saludo personalizado, usuario, clave temporal, enlace de inicio de sesión y aviso de cambio de contraseña.
+  * **Fanzine Habilitado:** Aviso automático con el título del fanzine adquirido y enlace directo a su biblioteca personal.
+* **Flujo "Aprobar y Avisar":** Al aprobar una compra en el panel de administración, se habilita el acceso y se abre WhatsApp listo para enviar con un solo clic.
+
+### 3. 🔒 Onboarding Seguro y Protección de Acceso
+* **Registro administrativo exclusivo:** Registro público cerrado; solo la administradora crea cuentas para compradores autorizados, evitando cuentas spam.
+* **Primer ingreso con cambio obligatorio de contraseña:** Cada usuario nuevo recibe una clave temporal (ej. `123456`) y el flag `must_change_password`. En su primer inicio de sesión, el sistema lo redirige obligatoriamente a `/cambiar-clave` para crear su contraseña personal.
+* **Gestión total de usuarios:** La administradora puede restablecer contraseñas, actualizar nombres, teléfonos o correos en cualquier momento.
+
+### 4. 🛡️ Almacenamiento Privado y Seguridad de Archivos
+* **Bucket Privado (`fanzines-private`):** Los archivos PDF completos nunca son accesibles mediante URLs públicas.
+* **URLs Firmadas de 60 segundos:** Solo los usuarios autenticados con acceso aprobado o la administradora pueden solicitar enlaces de lectura o descarga temporales que expiran en un minuto.
+* **Cabeceras HTTP diferenciadas:**
+  * Modo lectura online: `Content-Disposition: inline` (no dispara descarga en navegadores).
+  * Modo descarga: `Content-Disposition: attachment` con el nombre del fanzine sanitizado.
+
+### 5. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
+* **Endpoint de ping:** `/api/ping` ejecuta una consulta liviana a la base de datos para mantenerla activa.
+* **GitHub Actions Workflow:** Tarea automática en `.github/workflows/keep-alive.yml` que se ejecuta 4 veces al día (`0 */6 * * *`), garantizando que el proyecto de Supabase en el tier gratuito no entre en modo de reposo/pausa.
 
 ---
 
-## 🌐 Paso 2: Despliegue en Vercel
+## 🏗️ Arquitectura y Tecnologías
 
-1. Ingresa a [Vercel](https://vercel.com) e inicia sesión con tu cuenta de GitHub.
-2. Haz clic en **"Add New..."** -> **"Project"**.
-3. Selecciona tu repositorio `fanzines-web-Angelina` y haz clic en **Import**.
-4. En la sección **Environment Variables**, añade las siguientes variables:
-   * `NEXT_PUBLIC_SUPABASE_URL`: Tu URL de Supabase (`https://zahqoetdwonueuicufms.supabase.co`)
-   * `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Tu clave anónima de Supabase
-   * `SUPABASE_SERVICE_ROLE_KEY`: Tu clave service_role de Supabase
-   * `NEXT_PUBLIC_SITE_NAME`: `Fanzines de Angelina`
-   * `NEXT_PUBLIC_PAYMENT_INFO`: `Alias: tu.alias.aqui | CBU: 0000000000000000000000 | Titular: Tu Nombre`
-5. Haz clic en **Deploy**. ¡Vercel compilará y publicará la web automáticamente!
+* **Frontend & Backend:** Next.js 16 (App Router), React 18, TypeScript, Tailwind CSS, Lucide Icons.
+* **Visor PDF:** Mozilla PDF.js v3.11 alojado localmente en `/public/pdfjs/` para máxima velocidad e independencia de CDNs externos.
+* **Base de Datos & Autenticación:** Supabase (PostgreSQL, Supabase Auth con confirmación automática y Row Level Security).
+* **Almacenamiento:** Supabase Storage (`fanzines-covers` público para miniaturas, `fanzines-private` privado para PDFs).
+* **Despliegue:** Vercel con integración continua (CI/CD) vinculada a la rama `main` de GitHub.
 
 ---
 
-## 🔑 Cómo ser Administradora
+## 🗄️ Esquema de Base de Datos
 
-El script SQL está configurado para que **el primer usuario registrado en la web adquiera automáticamente el rol de Administrador (`admin`)**.
+El esquema se encuentra documentado en [`supabase-schema.sql`](./supabase-schema.sql) e incluye:
 
-Si tu compañera se registra primero, tendrá acceso inmediato al **Panel Admin** en la barra de navegación.
-
-Si necesitas hacer admin a otro usuario manualmente, en Supabase ve a **Table Editor** -> tabla `profiles`, busca su email y cambia el campo `role` de `'user'` a `'admin'`.
+1. **`profiles`:**
+   * `id` (UUID, referencia a `auth.users`)
+   * `email` (TEXT)
+   * `full_name` (TEXT)
+   * `phone` (TEXT, número de WhatsApp para contacto)
+   * `role` (`'admin'` | `'user'`)
+   * `must_change_password` (BOOLEAN, para exigir cambio en primer login)
+   * `created_at` (TIMESTAMP WITH TIME ZONE)
+2. **`fanzines`:**
+   * `id` (UUID)
+   * `title` (TEXT)
+   * `description` (TEXT)
+   * `price` (NUMERIC)
+   * `cover_url` (TEXT)
+   * `pdf_path` (TEXT, ruta en bucket privado)
+   * `is_active` (BOOLEAN, visibilidad en catálogo)
+   * `created_at` (TIMESTAMP WITH TIME ZONE)
+3. **`user_access`:**
+   * `user_id` (UUID)
+   * `fanzine_id` (UUID)
+   * `status` (`'pending'` | `'approved'` | `'rejected'`)
+   * `notes` (TEXT)
+   * `granted_at` (TIMESTAMP WITH TIME ZONE)
+4. **`payment_notifications`:**
+   * `user_id` (UUID)
+   * `fanzine_id` (UUID)
+   * `reference_code` (TEXT)
+   * `status` (`'pending'` | `'approved'` | `'rejected'`)
+   * `created_at` (TIMESTAMP WITH TIME ZONE)
 
 ---
 
-## 💻 Desarrollo Local
+## 🚀 Puesta en Marcha en Desarrollo Local
 
+### Prerrequisitos
+* Node.js v18+ o superior.
+* Cuenta en Supabase.
+
+### 1. Clonar e Instalar
 ```bash
-# Instalar dependencias
+git clone https://github.com/rdbergeruser-stack/fanzines-web-Angelina.git
+cd "fanzines-web-Angelina"
 npm install
-
-# Iniciar servidor de desarrollo
-npm run dev
 ```
 
+### 2. Configurar Variables de Entorno
+Crea un archivo `.env.local` en la raíz del proyecto:
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://zahqoetdwonueuicufms.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+NEXT_PUBLIC_SITE_NAME=Fanzines de Angelina
+NEXT_PUBLIC_PAYMENT_INFO=Alias: angelina.fanzines | CBU: 0000003100010000000000 | Titular: Angelina
+```
+
+### 3. Ejecutar en Servidor Local
+```bash
+npm run dev
+```
 Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
+
+### 4. Compilar para Producción
+```bash
+npm run build
+npm run start
+```
+
+---
+
+## 👩‍💼 Manual de Operación para la Administradora
+
+1. **Acceso al Panel:** Iniciar sesión con la cuenta de administradora y acceder a `/admin`.
+2. **Subir un Fanzine:** En la pestaña **Fanzines**, ingresar título, descripción, precio, cargar el PDF y opcionalmente una imagen de portada.
+3. **Dar de alta un nuevo comprador:**
+   * Ir a la pestaña **Gestión de Usuarios** -> botón **+ Crear Nuevo Usuario**.
+   * Ingresar nombre, email/usuario, teléfono de WhatsApp y clave temporal.
+   * El sistema creará la cuenta y abrirá el modal para enviar las credenciales por WhatsApp en 1 clic.
+4. **Aprobar pagos y habilitar lecturas:**
+   * En **Transferencias Recibidas**, revisar los pagos informados y presionar **Aprobar y Avisar**.
+   * Se abrirá automáticamente WhatsApp con el mensaje pre-armado y el teléfono del cliente para confirmar la entrega del fanzine.
+5. **Lectura por parte del cliente:**
+   * El cliente entra a [https://fanzines-angelina.vercel.app/login](https://fanzines-angelina.vercel.app/login).
+   * La primera vez ingresa su clave temporal y crea su contraseña propia.
+   * En la sección **Mis Fanzines** puede presionar **"Leer online"** para disfrutar el fanzine directamente en pantalla (en móvil o PC) o **"Descargar"** para guardar una copia en PDF.
