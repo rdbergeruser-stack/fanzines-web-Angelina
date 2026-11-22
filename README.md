@@ -28,7 +28,22 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
 * **Filtros en el Catálogo Público:** La página principal genera automáticamente barras de filtros por categoría para que los visitantes descubran y filtren las publicaciones con un solo toque.
 * **Edición de Fanzines Existentes:** Botón de edición rápida con modal en el panel de control para actualizar títulos, autores, categorías, páginas, precios y descripciones en tiempo real.
 
-### 3. 📱 Integración con WhatsApp y Agenda de Compradores
+### 3. 💰 Rendición de Cuentas, Métricas y Liquidación a Autores
+* **Panel Financiero para Múltiples Autores:** La administradora centraliza los cobros y cuenta con un módulo dedicado a rendir cuentas a cada creador/a participante.
+* **Métricas en Tiempo Real:**
+  * **Total Recaudado ($):** Suma total de las ventas aprobadas.
+  * **Ejemplares Vendidos:** Conteo exacto de copias habilitadas.
+  * **Autores Activos** y **Fanzine Estrella** con mayor popularidad.
+* **Liquidación por Autor en 1 Clic:**
+  * Agrupación automática de todas las ventas por autor/a.
+  * Detalle de cada obra vendida, precio unitario y subtotal recaudado.
+  * **Botón "Copiar Rendición WhatsApp":** Genera un informe detallado listo para pegar en WhatsApp al autor con el resumen de sus ventas y el total exacto a transferirle.
+  * **Botón "Abrir WhatsApp":** Abre WhatsApp Web directamente con el texto prearmado.
+* **Filtros por Período:** Permite liquidar por *Todo el Historial*, *Este Mes*, *Mes Anterior* o un *Rango Personalizado* con fechas desde/hasta.
+* **Ranking por Fanzines & Registro de Movimientos:** Visualización de ventas por publicación con barra de participación porcentual e historial cronológico detallado de cada comprador.
+* **Exportación a CSV / Excel:** Botón para descargar una planilla completa con todas las transacciones del período.
+
+### 4. 📱 Integración con WhatsApp y Agenda de Compradores
 * **Agenda integrada:** Guarda el número de teléfono/WhatsApp en el perfil de cada usuario al crearlo o editarlo.
 * **Auto-guardado inteligente:** Si la administradora escribe o corrige un número directamente en el modal de WhatsApp, se guarda automáticamente en la base de datos.
 * **Formateo internacional automático:** Adapta cualquier formato ingresado (`11 2345-6789`, `011...`, `+54 9 11...`) al estándar internacional exigido por WhatsApp (`54911...`).
@@ -37,17 +52,17 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
   * **Fanzine Habilitado:** Aviso automático con el título del fanzine adquirido y enlace directo a su biblioteca personal.
 * **Flujo "Aprobar y Avisar":** Al aprobar una compra en el panel de administración, se habilita el acceso y se abre WhatsApp listo para enviar con un solo clic.
 
-### 4. 🔒 Onboarding Seguro y Protección de Acceso
+### 5. 🔒 Onboarding Seguro y Protección de Acceso
 * **Registro administrativo exclusivo:** Registro público cerrado; solo la administradora crea cuentas para compradores autorizados, evitando cuentas spam.
 * **Primer ingreso con cambio obligatorio de contraseña:** Cada usuario nuevo recibe una clave temporal (ej. `123456`) y el flag `must_change_password`. En su primer inicio de sesión, el sistema lo redirige obligatoriamente a `/cambiar-clave` para crear su contraseña personal.
 * **Gestión total de usuarios:** La administradora puede restablecer contraseñas, actualizar nombres, teléfonos o correos en cualquier momento.
 
-### 5. 🛡️ Almacenamiento Privado y Seguridad de Archivos
+### 6. 🛡️ Almacenamiento Privado y Seguridad de Archivos
 * **Bucket Privado (`fanzines-private`):** Los archivos PDF completos nunca son accesibles mediante URLs públicas.
 * **URLs Firmadas de 60 segundos:** Solo los usuarios autenticados con acceso aprobado o la administradora pueden solicitar enlaces de lectura temporales que expiran en un minuto.
 * **Cabeceras HTTP de Lectura:** Se sirven con `Content-Disposition: inline` para alimentar exclusivamente el visor interactivo de la aplicación.
 
-### 6. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
+### 7. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
 * **Endpoint de ping:** `/api/ping` ejecuta una consulta liviana a la base de datos para mantenerla activa.
 * **GitHub Actions Workflow:** Tarea automática en `.github/workflows/keep-alive.yml` que se ejecuta 4 veces al día (`0 */6 * * *`), garantizando que el proyecto de Supabase en el tier gratuito no entre en modo de reposo/pausa.
 
@@ -151,9 +166,14 @@ npm run start
    * Ingresar nombre, email/usuario, teléfono de WhatsApp y clave temporal.
    * El sistema creará la cuenta y abrirá el modal para enviar las credenciales por WhatsApp en 1 clic.
 4. **Aprobar pagos y habilitar lecturas:**
-   * En **Transferencias Recibidas**, revisar los pagos informados y presionar **Aprobar y Avisar**.
+   * En **Avisos de Pago**, revisar los comprobantes informados y presionar **Aprobar y Avisar**.
    * Se abrirá automáticamente WhatsApp con el mensaje pre-armado y el teléfono del cliente para confirmar la entrega del fanzine.
-5. **Lectura por parte del cliente:**
+5. **Rendición de cuentas y liquidaciones a autores:**
+   * En la pestaña **Rendición & Ventas**, seleccionar el período a liquidar (*Este Mes*, *Mes Anterior*, etc.).
+   * Revisar el total recaudado por cada autor/a y sus obras.
+   * Presionar **"Copiar Rendición WhatsApp"** o **"Abrir WhatsApp"** para enviar el desglose exacto a cada creador y rendirle su dinero.
+   * Si es necesario, pulsar **"Exportar CSV"** para guardar el balance en Excel.
+6. **Lectura por parte del cliente:**
    * El cliente entra a [https://fanzines-angelina.vercel.app/login](https://fanzines-angelina.vercel.app/login).
    * La primera vez ingresa su clave temporal y crea su contraseña propia.
    * En la sección **Mis Fanzines** puede presionar **"Abrir Lector Online"** para disfrutar el fanzine directamente en pantalla completa (en móvil o PC) sin descargar el archivo.

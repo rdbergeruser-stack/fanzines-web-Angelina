@@ -36,13 +36,24 @@ import {
   Pencil,
   Tag,
   Layers,
+  TrendingUp,
+  BarChart3,
+  Calendar,
+  Download,
+  Award,
+  Wallet,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'fanzines' | 'users' | 'requests'>('fanzines');
+  const [activeTab, setActiveTab] = useState<'fanzines' | 'users' | 'requests' | 'sales'>('fanzines');
+  const [salesPeriod, setSalesPeriod] = useState<'all' | 'this_month' | 'last_month' | 'custom'>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [salesSubTab, setSalesSubTab] = useState<'authors' | 'fanzines' | 'movements'>('authors');
+  const [copiedAuthor, setCopiedAuthor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -641,6 +652,220 @@ export default function AdminPage() {
     new Set(fanzines.map((f) => f.category?.trim()).filter(Boolean))
   ) as string[];
 
+  // --- MÓDULO DE VENTAS & RENDICIONES ---
+  const getPeriodLabel = () => {
+    if (salesPeriod === 'this_month') {
+      const d = new Date();
+      return d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    }
+    if (salesPeriod === 'last_month') {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    }
+    if (salesPeriod === 'custom') {
+      return `${customStart || 'Inicio'} al ${customEnd || 'Hoy'}`;
+    }
+    return 'Histórico Completo';
+  };
+
+  const fanzineMap = new Map<string, Fanzine>(fanzines.map((f) => [f.id, f]));
+  const profileMap = new Map<string, Profile>(profiles.map((p) => [p.id, p]));
+
+  // Filtrar accesos aprobados según el período
+  const filteredSales = accesses.filter((acc) => {
+    if (acc.status !== 'approved') return false;
+    if (!acc.granted_at) return true;
+
+    const grantedDate = new Date(acc.granted_at);
+    const now = new Date();
+
+    if (salesPeriod === 'this_month') {
+      return (
+        grantedDate.getFullYear() === now.getFullYear() &&
+        grantedDate.getMonth() === now.getMonth()
+      );
+    }
+    if (salesPeriod === 'last_month') {
+      const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return (
+        grantedDate.getFullYear() === lastMonth.getFullYear() &&
+        grantedDate.getMonth() === lastMonth.getMonth()
+      );
+    }
+    if (salesPeriod === 'custom') {
+      if (customStart && new Date(customStart) > grantedDate) return false;
+      if (customEnd) {
+        const end = new Date(customEnd);
+        end.setHours(23, 59, 59, 999);
+        if (end < grantedDate) return false;
+      }
+    }
+    return true;
+  });
+
+  // Métricas globales
+  const totalSalesCount = filteredSales.length;
+  const totalSalesRevenue = filteredSales.reduce((acc, sale) => {
+    const f = sale.fanzine || fanzineMap.get(sale.fanzine_id);
+    return acc + (f?.price || 0);
+  }, 0);
+
+  // Rendición agrupada por autor
+  interface AuthorReportItem {
+    fanzineId: string;
+    title: string;
+    price: number;
+    copies: number;
+    revenue: number;
+    coverUrl?: string | null;
+  }
+
+  interface AuthorReport {
+    authorName: string;
+    totalCopies: number;
+    totalRevenue: number;
+    fanzines: AuthorReportItem[];
+  }
+
+  const authorReportsMap = new Map<string, AuthorReport>();
+
+  // 1. Agregar todos los fanzines del catálogo a su respectivo autor
+  fanzines.forEach((f) => {
+    const authorName = (f.author?.trim() || 'Angelina');
+    if (!authorReportsMap.has(authorName)) {
+      authorReportsMap.set(authorName, {
+        authorName,
+        totalCopies: 0,
+        totalRevenue: 0,
+        fanzines: [],
+      });
+    }
+    const report = authorReportsMap.get(authorName)!;
+    report.fanzines.push({
+      fanzineId: f.id,
+      title: f.title,
+      price: f.price || 0,
+      copies: 0,
+      revenue: 0,
+      coverUrl: f.cover_url,
+    });
+  });
+
+  // 2. Sumar las ventas del período
+  filteredSales.forEach((sale) => {
+    const f = sale.fanzine || fanzineMap.get(sale.fanzine_id);
+    const authorName = (f?.author?.trim() || 'Angelina');
+    const price = f?.price || 0;
+    const fId = f?.id || sale.fanzine_id;
+
+    if (!authorReportsMap.has(authorName)) {
+      authorReportsMap.set(authorName, {
+        authorName,
+        totalCopies: 0,
+        totalRevenue: 0,
+        fanzines: [],
+      });
+    }
+
+    const report = authorReportsMap.get(authorName)!;
+    report.totalCopies += 1;
+    report.totalRevenue += price;
+
+    let fEntry = report.fanzines.find((item) => item.fanzineId === fId);
+    if (!fEntry) {
+      fEntry = {
+        fanzineId: fId,
+        title: f?.title || 'Fanzine',
+        price,
+        copies: 0,
+        revenue: 0,
+        coverUrl: f?.cover_url,
+      };
+      report.fanzines.push(fEntry);
+    }
+    fEntry.copies += 1;
+    fEntry.revenue += price;
+  });
+
+  const authorReports = Array.from(authorReportsMap.values()).sort(
+    (a, b) => b.totalRevenue - a.totalRevenue || b.totalCopies - a.totalCopies
+  );
+
+  // Ranking por fanzine
+  const fanzineReports = fanzines
+    .map((f) => {
+      const count = filteredSales.filter((s) => s.fanzine_id === f.id).length;
+      const revenue = count * (f.price || 0);
+      return {
+        ...f,
+        copiesSold: count,
+        revenue,
+      };
+    })
+    .sort((a, b) => b.copiesSold - a.copiesSold || b.revenue - a.revenue);
+
+  const topFanzine = fanzineReports.length > 0 && fanzineReports[0].copiesSold > 0 ? fanzineReports[0] : null;
+  const topAuthor = authorReports.length > 0 && authorReports[0].totalCopies > 0 ? authorReports[0] : null;
+
+  // Generador de texto para WhatsApp
+  const getAuthorWhatsAppText = (author: AuthorReport) => {
+    const periodLabel = getPeriodLabel();
+    let msg = `*Rendición de Ventas - ${author.authorName}*\n`;
+    msg += `📅 Período: ${periodLabel}\n`;
+    msg += `📚 Total ejemplares vendidos: ${author.totalCopies}\n\n`;
+    msg += `*Detalle por obra:*\n`;
+
+    const sold = author.fanzines.filter((item) => item.copies > 0);
+    if (sold.length === 0) {
+      msg += `_Sin ventas registradas en este período._\n`;
+    } else {
+      sold.forEach((item) => {
+        msg += `• *${item.title}*: ${item.copies} ${item.copies === 1 ? 'ejemplar' : 'ejemplares'} ($${item.price} c/u) = *$${item.revenue.toLocaleString('es-AR')}*\n`;
+      });
+    }
+
+    msg += `\n💰 *Total a rendir: $${author.totalRevenue.toLocaleString('es-AR')}*\n\n`;
+    msg += `_Plataforma digital Fanzines Angelina_`;
+    return msg;
+  };
+
+  const handleCopyAuthorReport = (author: AuthorReport) => {
+    const msg = getAuthorWhatsAppText(author);
+    navigator.clipboard.writeText(msg);
+    setCopiedAuthor(author.authorName);
+    setTimeout(() => setCopiedAuthor(null), 3000);
+  };
+
+  const handleExportCSV = () => {
+    const periodLabel = getPeriodLabel().replace(/\s+/g, '_');
+    const headers = ['Fecha Aprobacion', 'Fanzine', 'Autor', 'Precio ($)', 'Comprador', 'Email Comprador', 'WhatsApp'];
+    const rows = filteredSales.map((sale) => {
+      const f = sale.fanzine || fanzineMap.get(sale.fanzine_id);
+      const p = sale.profile || profileMap.get(sale.user_id);
+      const dateStr = sale.granted_at ? new Date(sale.granted_at).toLocaleDateString('es-AR') : '';
+      return [
+        `"${dateStr}"`,
+        `"${(f?.title || 'Fanzine').replace(/"/g, '""')}"`,
+        `"${(f?.author || 'Angelina').replace(/"/g, '""')}"`,
+        `"${f?.price || 0}"`,
+        `"${(p?.full_name || 'Comprador').replace(/"/g, '""')}"`,
+        `"${p?.email || ''}"`,
+        `"${p?.phone || ''}"`,
+      ];
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Rendicion_Ventas_${periodLabel}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
       {/* Header */}
@@ -677,10 +902,10 @@ export default function AdminPage() {
         )}
 
         {/* PESTAÑAS PRINCIPALES */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
           <button
             onClick={() => setActiveTab('fanzines')}
-            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'fanzines'
                 ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
@@ -692,31 +917,43 @@ export default function AdminPage() {
 
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all ${
+            className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
               activeTab === 'users'
                 ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
             <Users className="w-4 h-4 text-brand-600" />
-            <span>Gestión de Usuarios ({profiles.length})</span>
+            <span>Usuarios ({profiles.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('requests')}
-            className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all relative ${
+            className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all relative ${
               activeTab === 'requests'
                 ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
                 : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
             }`}
           >
             <CheckCircle className="w-4 h-4 text-brand-600" />
-            <span>Avisos de Pago</span>
+            <span>Avisos Pago</span>
             {pendingRequests.length > 0 && (
-              <span className="ml-1.5 px-2 py-0.5 rounded-full bg-brand-600 text-white text-xs font-bold">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-brand-600 text-white text-[10px] font-bold">
                 {pendingRequests.length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('sales')}
+            className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'sales'
+                ? 'bg-white text-emerald-800 shadow-md shadow-stone-200/50'
+                : 'text-stone-600 hover:text-emerald-700 hover:bg-stone-50'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <span>Rendición & Ventas</span>
           </button>
         </div>
       </div>
@@ -1310,6 +1547,491 @@ export default function AdminPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SECCIÓN 4: RENDICIÓN & VENTAS */}
+      {activeTab === 'sales' && (
+        <div className="space-y-8 animate-in fade-in">
+          {/* Header de la sección y acciones */}
+          <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold mb-2">
+                <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Panel Financiero y Liquidaciones</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-bold text-stone-900">Rendición de Cuentas y Ventas</h2>
+              <p className="text-xs sm:text-sm text-stone-500 mt-1">
+                Total de ventas aprobadas por autor y fanzine. Rinde el dinero correspondiente a cada creador con 1 clic.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCSV}
+                disabled={filteredSales.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs font-semibold transition-all shadow-sm disabled:opacity-50"
+                title="Descargar planilla CSV para Excel o Google Sheets"
+              >
+                <Download className="w-4 h-4 text-stone-600" />
+                <span>Exportar CSV</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Barra de Filtros por Período */}
+          <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-xs font-bold text-stone-700 flex items-center gap-1.5 uppercase tracking-wider">
+                <Calendar className="w-4 h-4 text-brand-600" />
+                <span>Filtrar por Período:</span>
+              </span>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { id: 'all', label: 'Todo el Historial' },
+                  { id: 'this_month', label: 'Este Mes' },
+                  { id: 'last_month', label: 'Mes Anterior' },
+                  { id: 'custom', label: 'Personalizado' },
+                ].map((item) => {
+                  const isActive = salesPeriod === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setSalesPeriod(item.id as any)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {salesPeriod === 'custom' && (
+              <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center gap-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-stone-500 font-medium">Desde:</span>
+                  <input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-stone-300 text-stone-700 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-stone-500 font-medium">Hasta:</span>
+                  <input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="px-3 py-1.5 rounded-xl border border-stone-300 text-stone-700 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+                  />
+                </div>
+                {(customStart || customEnd) && (
+                  <button
+                    onClick={() => {
+                      setCustomStart('');
+                      setCustomEnd('');
+                    }}
+                    className="text-stone-500 hover:text-stone-800 underline text-xs"
+                  >
+                    Limpiar fechas
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Tarjetas de Métricas Generales (KPIs) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Total Recaudado</span>
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-3xl font-extrabold text-stone-900 tracking-tight">
+                ${totalSalesRevenue.toLocaleString('es-AR')}
+              </p>
+              <p className="text-[11px] text-stone-400 mt-1">Período: {getPeriodLabel()}</p>
+            </div>
+
+            <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Ejemplares Vendidos</span>
+                <div className="w-8 h-8 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-3xl font-extrabold text-stone-900 tracking-tight">
+                {totalSalesCount}
+              </p>
+              <p className="text-[11px] text-stone-400 mt-1">Ventas y accesos aprobados</p>
+            </div>
+
+            <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Autores Activos</span>
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-3xl font-extrabold text-stone-900 tracking-tight">
+                {authorReports.filter((a) => a.totalCopies > 0).length} / {authorReports.length}
+              </p>
+              <p className="text-[11px] text-stone-400 mt-1">Con ventas en el período</p>
+            </div>
+
+            <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Fanzine Estrella</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+              </div>
+              {topFanzine ? (
+                <>
+                  <p className="text-lg font-bold text-stone-900 truncate" title={topFanzine.title}>
+                    {topFanzine.title}
+                  </p>
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-1">
+                    {topFanzine.copiesSold} {topFanzine.copiesSold === 1 ? 'venta' : 'ventas'} (${topFanzine.revenue.toLocaleString('es-AR')})
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-stone-400 mt-2">Sin ventas en este período</p>
+              )}
+            </div>
+          </div>
+
+          {/* Sub-navegación: Por Autor | Por Fanzine | Movimientos Detallados */}
+          <div className="flex items-center gap-2 border-b border-stone-200 pb-3 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => setSalesSubTab('authors')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                salesSubTab === 'authors'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Rendición por Autor ({authorReports.length})</span>
+            </button>
+
+            <button
+              onClick={() => setSalesSubTab('fanzines')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                salesSubTab === 'fanzines'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Ranking por Fanzine ({fanzines.length})</span>
+            </button>
+
+            <button
+              onClick={() => setSalesSubTab('movements')}
+              className={`flex items-center gap-2 py-2 px-4 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                salesSubTab === 'movements'
+                  ? 'bg-stone-900 text-white shadow-sm'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Registro Detallado ({filteredSales.length})</span>
+            </button>
+          </div>
+
+          {/* SUB-VISTA 1: RENDICIÓN POR AUTOR */}
+          {salesSubTab === 'authors' && (
+            <div className="space-y-6">
+              {authorReports.length === 0 ? (
+                <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-stone-300">
+                  <Users className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-stone-700">No hay autores registrados</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {authorReports.map((author) => {
+                    const isCopied = copiedAuthor === author.authorName;
+
+                    return (
+                      <div
+                        key={author.authorName}
+                        className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                      >
+                        {/* Cabecera del Autor */}
+                        <div className="p-6 border-b border-stone-100 bg-gradient-to-br from-stone-50/50 to-white">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 font-black text-lg flex items-center justify-center shadow-inner">
+                                {author.authorName.charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <h3 className="font-extrabold text-stone-900 text-lg leading-tight">
+                                  {author.authorName}
+                                </h3>
+                                <p className="text-xs text-stone-500 mt-0.5">
+                                  {author.fanzines.length} {author.fanzines.length === 1 ? 'obra publicada' : 'obras publicadas'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Monto Total a Rendir */}
+                            <div className="text-right">
+                              <span className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider block">
+                                Total a Rendir
+                              </span>
+                              <span className="text-2xl font-black text-emerald-600">
+                                ${author.totalRevenue.toLocaleString('es-AR')}
+                              </span>
+                              <span className="text-xs text-stone-500 block">
+                                {author.totalCopies} {author.totalCopies === 1 ? 'ejemplar' : 'ejemplares'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Botones de acción para WhatsApp */}
+                          <div className="mt-4 pt-4 border-t border-stone-200/60 flex items-center gap-2 flex-wrap">
+                            <button
+                              onClick={() => handleCopyAuthorReport(author)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-sm ${
+                                isCopied
+                                  ? 'bg-emerald-700 text-white'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                              }`}
+                              title="Copiar desglose completo para pegar en WhatsApp"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>¡Reporte Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copiar Rendición WhatsApp</span>
+                                </>
+                              )}
+                            </button>
+
+                            <a
+                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(getAuthorWhatsAppText(author))}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-semibold transition-all shadow-sm"
+                              title="Abrir WhatsApp Web con el texto prearmado"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Abrir WhatsApp</span>
+                            </a>
+                          </div>
+                        </div>
+
+                        {/* Desglose de Fanzines del Autor */}
+                        <div className="p-6 divide-y divide-stone-100 flex-1">
+                          <p className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mb-3">
+                            Desglose por Fanzine ({getPeriodLabel()}):
+                          </p>
+                          {author.fanzines.map((item) => (
+                            <div key={item.fanzineId} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                              <div className="min-w-0 flex-1">
+                                <p className="font-bold text-stone-800 truncate">{item.title}</p>
+                                <p className="text-[11px] text-stone-500">
+                                  Precio: ${item.price} c/u
+                                </p>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <span className={`font-semibold ${item.copies > 0 ? 'text-stone-900' : 'text-stone-400'}`}>
+                                  {item.copies} {item.copies === 1 ? 'venta' : 'ventas'}
+                                </span>
+                                <span className={`block font-bold text-xs ${item.copies > 0 ? 'text-emerald-700' : 'text-stone-400'}`}>
+                                  ${item.revenue.toLocaleString('es-AR')}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SUB-VISTA 2: RANKING POR FANZINE */}
+          {salesSubTab === 'fanzines' && (
+            <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
+              <div className="p-5 border-b border-stone-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Rendimiento por Fanzine</h3>
+                  <p className="text-xs text-stone-500">Listado de títulos ordenados por cantidad de ventas</p>
+                </div>
+                <span className="text-xs font-medium text-stone-500">
+                  {fanzineReports.length} obras en catálogo
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-stone-50 text-stone-500 uppercase tracking-wider text-[10px] border-b border-stone-200">
+                    <tr>
+                      <th className="py-3 px-4">Fanzine</th>
+                      <th className="py-3 px-4">Autor / Autora</th>
+                      <th className="py-3 px-4 text-center">Precio Unitario</th>
+                      <th className="py-3 px-4 text-center">Ejemplares Vendidos</th>
+                      <th className="py-3 px-4 text-right">Total Recaudado</th>
+                      <th className="py-3 px-4 text-center">Popularidad</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {fanzineReports.map((item, idx) => {
+                      const sharePercent =
+                        totalSalesCount > 0 ? Math.round((item.copiesSold / totalSalesCount) * 100) : 0;
+
+                      return (
+                        <tr key={item.id} className="hover:bg-stone-50/60 transition-colors">
+                          <td className="py-3.5 px-4 font-semibold text-stone-900 flex items-center gap-3">
+                            <span className="text-[11px] font-bold text-stone-400 w-4 text-center">
+                              #{idx + 1}
+                            </span>
+                            <div className="w-9 h-11 bg-stone-100 rounded-lg overflow-hidden flex-shrink-0 border border-stone-200">
+                              {item.cover_url ? (
+                                <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-stone-300">
+                                  <BookOpen className="w-4 h-4" />
+                                </div>
+                              )}
+                            </div>
+                            <div>
+                              <p className="font-bold text-stone-900 leading-snug">{item.title}</p>
+                              {item.category && (
+                                <span className="text-[10px] text-brand-600 bg-brand-50 px-1.5 py-0.5 rounded font-medium">
+                                  {item.category}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-stone-600 font-medium">
+                            {item.author || 'Angelina'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-mono text-stone-700">
+                            ${item.price}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-full font-bold text-xs ${
+                                item.copiesSold > 0
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-stone-100 text-stone-400'
+                              }`}
+                            >
+                              {item.copiesSold}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-extrabold text-stone-900">
+                            ${item.revenue.toLocaleString('es-AR')}
+                          </td>
+                          <td className="py-3.5 px-4 text-center">
+                            <div className="w-24 mx-auto bg-stone-100 h-2 rounded-full overflow-hidden">
+                              <div
+                                className="bg-emerald-500 h-full rounded-full transition-all"
+                                style={{ width: `${sharePercent}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-stone-400 mt-0.5 block">{sharePercent}%</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SUB-VISTA 3: REGISTRO DETALLADO DE VENTAS */}
+          {salesSubTab === 'movements' && (
+            <div className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-sm">
+              <div className="p-5 border-b border-stone-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Movimientos Individuales</h3>
+                  <p className="text-xs text-stone-500">Historial de cada acceso y venta aprobada</p>
+                </div>
+                <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                  {filteredSales.length} ventas en el período
+                </span>
+              </div>
+
+              {filteredSales.length === 0 ? (
+                <div className="p-12 text-center">
+                  <FileText className="w-10 h-10 text-stone-300 mx-auto mb-2" />
+                  <p className="text-sm font-semibold text-stone-700">No hay movimientos en este período</p>
+                  <p className="text-xs text-stone-400 mt-1">Prueba seleccionando "Todo el Historial".</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-stone-50 text-stone-500 uppercase tracking-wider text-[10px] border-b border-stone-200">
+                      <tr>
+                        <th className="py-3 px-4">Fecha</th>
+                        <th className="py-3 px-4">Fanzine</th>
+                        <th className="py-3 px-4">Autor/a</th>
+                        <th className="py-3 px-4 text-right">Precio</th>
+                        <th className="py-3 px-4">Comprador</th>
+                        <th className="py-3 px-4">Contacto</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {filteredSales.map((sale) => {
+                        const f = sale.fanzine || fanzineMap.get(sale.fanzine_id);
+                        const p = sale.profile || profileMap.get(sale.user_id);
+                        const dateStr = sale.granted_at
+                          ? new Date(sale.granted_at).toLocaleString('es-AR', {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })
+                          : 'Fecha s/d';
+
+                        return (
+                          <tr key={sale.id} className="hover:bg-stone-50/60 transition-colors">
+                            <td className="py-3 px-4 font-mono text-[11px] text-stone-500">
+                              {dateStr}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-stone-900">
+                              {f?.title || 'Fanzine'}
+                            </td>
+                            <td className="py-3 px-4 text-stone-600 font-medium">
+                              {f?.author || 'Angelina'}
+                            </td>
+                            <td className="py-3 px-4 text-right font-extrabold text-emerald-700 font-mono">
+                              ${f?.price || 0}
+                            </td>
+                            <td className="py-3 px-4 text-stone-800 font-medium">
+                              {p?.full_name || 'Comprador'}
+                            </td>
+                            <td className="py-3 px-4 text-stone-500 text-[11px]">
+                              <div>{p?.email}</div>
+                              {p?.phone && <div className="text-emerald-700 font-mono">{p.phone}</div>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>

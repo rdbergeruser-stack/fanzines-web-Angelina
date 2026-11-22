@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
     // Traer todos los accesos actuales
     const { data: accesses, error: aError } = await admin
       .from('user_access')
-      .select('*');
+      .select('*, fanzine:fanzines(*), profile:profiles(*)')
+      .order('granted_at', { ascending: false });
 
     if (aError) throw aError;
 
