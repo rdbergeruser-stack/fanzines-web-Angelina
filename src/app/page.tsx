@@ -443,9 +443,17 @@ export default function HomePage() {
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-stone-200 relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between pb-4 border-b border-stone-100 mb-6">
               <div className="flex items-center gap-3.5">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-amber-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-brand-500/20 flex-shrink-0">
-                  {selectedAuthor.name.charAt(0).toUpperCase()}
-                </div>
+                {selectedAuthor.avatar_url ? (
+                  <img
+                    src={selectedAuthor.avatar_url}
+                    alt={selectedAuthor.name}
+                    className="w-14 h-14 rounded-2xl object-cover border border-stone-200 shadow-md flex-shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-amber-500 text-white font-black text-xl flex items-center justify-center shadow-md shadow-brand-500/20 flex-shrink-0">
+                    {selectedAuthor.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-semibold mb-1">
                     <User className="w-3 h-3 text-brand-600" />

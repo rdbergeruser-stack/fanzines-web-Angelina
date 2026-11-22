@@ -42,13 +42,15 @@ import {
   Download,
   Award,
   Wallet,
+  Camera,
+  Globe,
 } from 'lucide-react';
 
 export default function AdminPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<'fanzines' | 'users' | 'requests' | 'sales'>('fanzines');
+  const [activeTab, setActiveTab] = useState<'fanzines' | 'authors' | 'users' | 'requests' | 'sales'>('fanzines');
   const [salesPeriod, setSalesPeriod] = useState<'all' | 'this_month' | 'last_month' | 'custom'>('all');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -125,13 +127,23 @@ export default function AdminPage() {
   const [shareFanzineTitle, setShareFanzineTitle] = useState('');
   const [copiedShare, setCopiedShare] = useState(false);
 
-  // Autores y Modal para EDITAR Ficha de Autor
+  // Selector de autores dinámico
+  const [isNewAuthorCustom, setIsNewAuthorCustom] = useState(false);
+  const [isEditAuthorCustom, setIsEditAuthorCustom] = useState(false);
+
+  // Autores y Modal para EDITAR / CREAR Ficha de Autor
   const [authors, setAuthors] = useState<Author[]>([]);
   const [editingAuthor, setEditingAuthor] = useState<Author | null>(null);
+  const [isNewAuthor, setIsNewAuthor] = useState(false);
+  const [authorNameInput, setAuthorNameInput] = useState('');
   const [authorBio, setAuthorBio] = useState('');
   const [authorInstagram, setAuthorInstagram] = useState('');
+  const [authorAvatarUrl, setAuthorAvatarUrl] = useState('');
+  const [authorAvatarFile, setAuthorAvatarFile] = useState<File | null>(null);
+  const [authorAvatarPreview, setAuthorAvatarPreview] = useState<string | null>(null);
   const [savingAuthor, setSavingAuthor] = useState(false);
   const [authorMsg, setAuthorMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [searchAuthor, setSearchAuthor] = useState('');
 
   const loadAdminData = async () => {
     setLoading(true);
@@ -241,6 +253,7 @@ export default function AdminPage() {
       setNewDesc('');
       setNewPrice('');
       setNewAuthor('Angelina');
+      setIsNewAuthorCustom(false);
       setNewCategory('');
       setNewPagesCount('');
       setNewEditionNumber('');
@@ -260,13 +273,24 @@ export default function AdminPage() {
     }
   };
 
+  // Lista unificada de autores disponibles (Angelina + tabla authors + fanzines)
+  const authorOptions = Array.from(
+    new Set([
+      'Angelina',
+      ...authors.map((a) => a.name?.trim()).filter(Boolean),
+      ...fanzines.map((f) => f.author?.trim()).filter(Boolean) as string[],
+    ])
+  ).filter(Boolean);
+
   // Abrir modal de edición de fanzine
   const openEditFanzine = (f: Fanzine) => {
     setEditingFanzine(f);
     setEditFTitle(f.title || '');
     setEditFDesc(f.description || '');
     setEditFPrice(f.price?.toString() || '0');
-    setEditFAuthor(f.author || 'Angelina');
+    const auth = f.author || 'Angelina';
+    setEditFAuthor(auth);
+    setIsEditAuthorCustom(!authorOptions.includes(auth));
     setEditFCategory(f.category || '');
     setEditFPagesCount(f.pages_count?.toString() || '');
     setEditFEditionNumber(f.edition_number || '');
@@ -338,8 +362,29 @@ export default function AdminPage() {
     }
   };
 
-  // Abrir modal de edición de autor
+  // Abrir modal para CREAR autor nuevo
+  const openCreateAuthor = () => {
+    setIsNewAuthor(true);
+    setEditingAuthor({
+      id: '',
+      name: '',
+      bio: '',
+      instagram: '',
+      avatar_url: null,
+      created_at: '',
+    });
+    setAuthorNameInput('');
+    setAuthorBio('');
+    setAuthorInstagram('');
+    setAuthorAvatarUrl('');
+    setAuthorAvatarFile(null);
+    setAuthorAvatarPreview(null);
+    setAuthorMsg(null);
+  };
+
+  // Abrir modal de edición de autor existente
   const openEditAuthor = (authorName: string) => {
+    setIsNewAuthor(false);
     const clean = authorName.trim();
     const found = authors.find((a) => a.name.toLowerCase() === clean.toLowerCase()) || {
       id: '',
@@ -350,36 +395,57 @@ export default function AdminPage() {
       created_at: '',
     };
     setEditingAuthor(found);
+    setAuthorNameInput(found.name);
     setAuthorBio(found.bio || '');
     setAuthorInstagram(found.instagram || '');
+    setAuthorAvatarUrl(found.avatar_url || '');
+    setAuthorAvatarFile(null);
+    setAuthorAvatarPreview(found.avatar_url || null);
     setAuthorMsg(null);
   };
 
-  // Guardar ficha de autor
+  // Guardar ficha de autor (crear o actualizar)
   const handleSaveAuthor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingAuthor) return;
+    if (!authorNameInput.trim()) {
+      setAuthorMsg({ type: 'err', text: 'El nombre del autor/a es obligatorio' });
+      return;
+    }
     setSavingAuthor(true);
     setAuthorMsg(null);
 
     try {
+      const fd = new FormData();
+      fd.append('name', authorNameInput.trim());
+      if (editingAuthor && !isNewAuthor && editingAuthor.name && editingAuthor.name !== authorNameInput.trim()) {
+        fd.append('oldName', editingAuthor.name);
+      }
+      fd.append('bio', authorBio);
+      fd.append('instagram', authorInstagram);
+      if (authorAvatarUrl) fd.append('avatar_url', authorAvatarUrl);
+      if (authorAvatarFile) fd.append('avatar', authorAvatarFile);
+
       const res = await fetch('/api/authors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editingAuthor.name,
-          bio: authorBio,
-          instagram: authorInstagram,
-        }),
+        body: fd,
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar autor');
 
-      setAuthorMsg({ type: 'ok', text: '¡Ficha de autor actualizada correctamente!' });
+      setAuthorMsg({ type: 'ok', text: '¡Ficha de autor guardada correctamente!' });
+
+      // Si se renombró el autor, actualizar fanzines en memoria
+      if (editingAuthor && !isNewAuthor && editingAuthor.name && editingAuthor.name !== authorNameInput.trim()) {
+        const oldN = editingAuthor.name.toLowerCase();
+        setFanzines((prev) =>
+          prev.map((f) => (f.author?.toLowerCase() === oldN ? { ...f, author: authorNameInput.trim() } : f))
+        );
+      }
 
       setAuthors((prev) => {
-        const idx = prev.findIndex((a) => a.name.toLowerCase() === editingAuthor.name.toLowerCase());
+        const targetName = (editingAuthor && !isNewAuthor && editingAuthor.name ? editingAuthor.name : authorNameInput).toLowerCase();
+        const idx = prev.findIndex((a) => a.name.toLowerCase() === targetName);
         if (idx >= 0) {
           const copy = [...prev];
           copy[idx] = data.author;
@@ -390,11 +456,28 @@ export default function AdminPage() {
 
       setTimeout(() => {
         setEditingAuthor(null);
-      }, 1000);
+      }, 900);
     } catch (err: any) {
       setAuthorMsg({ type: 'err', text: err.message || 'Error al guardar ficha' });
     } finally {
       setSavingAuthor(false);
+    }
+  };
+
+  // Eliminar autor
+  const handleDeleteAuthor = async (authorName: string) => {
+    if (!confirm(`¿Estás segura de eliminar la ficha de "${authorName}"? Sus fanzines seguirán existiendo en el catálogo.`)) return;
+    try {
+      const res = await fetch(`/api/authors?name=${encodeURIComponent(authorName)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setAuthors((prev) => prev.filter((a) => a.name.toLowerCase() !== authorName.toLowerCase()));
+      } else {
+        alert('Error al eliminar el autor');
+      }
+    } catch (e) {
+      alert('Error de conexión');
     }
   };
 
@@ -743,6 +826,30 @@ export default function AdminPage() {
     new Set(fanzines.map((f) => f.category?.trim()).filter(Boolean))
   ) as string[];
 
+  // Datos para la pestaña de gestión de autores
+  const authorCardsData = authorOptions
+    .map((name) => {
+      const cleanName = name.trim();
+      const profile = authors.find((a) => a.name.toLowerCase() === cleanName.toLowerCase()) || null;
+      const authorFanzines = fanzines.filter(
+        (f) => (f.author?.trim() || 'Angelina').toLowerCase() === cleanName.toLowerCase()
+      );
+      return {
+        name: cleanName,
+        profile,
+        fanzines: authorFanzines,
+      };
+    })
+    .filter((a) => {
+      if (!searchAuthor.trim()) return true;
+      const term = searchAuthor.toLowerCase();
+      return (
+        a.name.toLowerCase().includes(term) ||
+        (a.profile?.bio && a.profile.bio.toLowerCase().includes(term)) ||
+        (a.profile?.instagram && a.profile.instagram.toLowerCase().includes(term))
+      );
+    });
+
   // --- MÓDULO DE VENTAS & RENDICIONES ---
   const getPeriodLabel = () => {
     if (salesPeriod === 'this_month') {
@@ -993,7 +1100,7 @@ export default function AdminPage() {
         )}
 
         {/* PESTAÑAS PRINCIPALES */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
           <button
             onClick={() => setActiveTab('fanzines')}
             className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
@@ -1004,6 +1111,18 @@ export default function AdminPage() {
           >
             <BookOpen className="w-4 h-4 text-brand-600" />
             <span>Fanzines ({fanzines.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('authors')}
+            className={`flex items-center justify-center gap-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+              activeTab === 'authors'
+                ? 'bg-white text-stone-900 shadow-md shadow-stone-200/50'
+                : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+            }`}
+          >
+            <User className="w-4 h-4 text-brand-600" />
+            <span>Autores ({authorOptions.length})</span>
           </button>
 
           <button
@@ -1095,16 +1214,68 @@ export default function AdminPage() {
                 {/* Autor y Género */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      Autor / Autora
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Angelina"
-                      value={newAuthor}
-                      onChange={(e) => setNewAuthor(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-stone-700">
+                        Autor / Autora *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('authors')}
+                        className="text-[10px] text-brand-600 hover:text-brand-700 font-semibold"
+                        title="Ir a gestionar fichas de autores"
+                      >
+                        Gestionar
+                      </button>
+                    </div>
+
+                    <select
+                      value={authorOptions.includes(newAuthor) && !isNewAuthorCustom ? newAuthor : '__custom__'}
+                      onChange={(e) => {
+                        if (e.target.value === '__custom__') {
+                          setIsNewAuthorCustom(true);
+                          setNewAuthor('');
+                        } else {
+                          setIsNewAuthorCustom(false);
+                          setNewAuthor(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-medium cursor-pointer"
+                    >
+                      <option value="" disabled>Selecciona un autor/a...</option>
+                      {authorOptions.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      <option value="__custom__">➕ Escribir otro / Nuevo autor...</option>
+                    </select>
+
+                    {isNewAuthorCustom && (
+                      <div className="mt-2">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Escribe el nombre del nuevo autor/a..."
+                          value={newAuthor}
+                          onChange={(e) => setNewAuthor(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-xl border-2 border-brand-500 bg-brand-50/20 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                          autoFocus
+                        />
+                        <div className="flex items-center justify-between mt-1 text-[11px] text-stone-500">
+                          <span>Se creará automáticamente.</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsNewAuthorCustom(false);
+                              setNewAuthor(authorOptions[0] || 'Angelina');
+                            }}
+                            className="text-brand-600 hover:underline"
+                          >
+                            Volver a lista
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1344,6 +1515,200 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* SECCIÓN: GESTIÓN DE AUTORES Y FICHAS EDITORIALES */}
+      {activeTab === 'authors' && (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-stone-200 shadow-sm">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold mb-2 border border-brand-200/50">
+                <Sparkles className="w-3.5 h-3.5 text-brand-600" />
+                <span>Perfiles Públicos de Autores</span>
+              </div>
+              <h2 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+                <User className="w-5 h-5 text-brand-600" />
+                <span>Gestión de Autores y Fichas Editoriales</span>
+              </h2>
+              <p className="text-xs text-stone-500 mt-1 max-w-xl leading-relaxed">
+                Administra las semblanzas, Instagram y fotos de cada autor/a. 
+                Los lectores pueden tocar el nombre de cualquier autor en la tienda para ver su ficha completa y todas sus publicaciones.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreateAuthor}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition-colors shadow-sm self-start sm:self-center"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Registrar Nuevo Autor</span>
+            </button>
+          </div>
+
+          {/* Buscador de autores */}
+          <div className="relative">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Buscar autor por nombre, biografía o Instagram..."
+              value={searchAuthor}
+              onChange={(e) => setSearchAuthor(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-stone-200 rounded-2xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+            />
+          </div>
+
+          {/* Grilla de Autores */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {authorCardsData.length === 0 ? (
+              <div className="col-span-full bg-white p-12 text-center rounded-3xl border border-stone-200 text-stone-500 space-y-3">
+                <User className="w-12 h-12 text-stone-300 mx-auto" />
+                <p className="font-semibold text-stone-700">No se encontraron autores</p>
+                <p className="text-xs text-stone-400">
+                  Usa el botón &quot;+ Registrar Nuevo Autor&quot; para dar de alta la primera ficha editorial.
+                </p>
+              </div>
+            ) : (
+              authorCardsData.map((authorItem) => {
+                const isAngelinaAuthor = authorItem.name.toLowerCase() === 'angelina';
+                return (
+                  <div
+                    key={authorItem.name}
+                    className="bg-white rounded-3xl border border-stone-200 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      {/* Cabecera de la tarjeta */}
+                      <div className="flex items-start gap-3.5">
+                        {authorItem.profile?.avatar_url ? (
+                          <img
+                            src={authorItem.profile.avatar_url}
+                            alt={authorItem.name}
+                            className="w-14 h-14 rounded-2xl object-cover border border-stone-200 shadow-xs flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-100 to-amber-100 text-brand-700 font-extrabold text-xl flex items-center justify-center border border-brand-200/50 flex-shrink-0 shadow-xs">
+                            {authorItem.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h3 className="font-bold text-stone-900 text-base truncate">
+                              {authorItem.name}
+                            </h3>
+                            {isAngelinaAuthor ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                                Fundadora
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-600">
+                                Autor/a
+                              </span>
+                            )}
+                          </div>
+
+                          {authorItem.profile?.instagram ? (
+                            <a
+                              href={`https://instagram.com/${authorItem.profile.instagram}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-pink-600 hover:text-pink-700 font-semibold mt-0.5 group"
+                            >
+                              <span>@{authorItem.profile.instagram}</span>
+                              <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-stone-400 italic block mt-0.5">
+                              Sin Instagram configurado
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Biografía */}
+                      <div className="bg-stone-50/70 p-3 rounded-2xl border border-stone-100 min-h-[4.5rem]">
+                        {authorItem.profile?.bio ? (
+                          <p className="text-xs text-stone-600 line-clamp-3 leading-relaxed whitespace-pre-line">
+                            {authorItem.profile.bio}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-stone-400 italic">
+                            Sin biografía cargada todavía. Toca &quot;Editar Ficha&quot; para agregarla.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Obras en el catálogo */}
+                      <div>
+                        <div className="flex items-center justify-between text-xs text-stone-500 mb-2">
+                          <span className="font-semibold text-stone-700">
+                            Fanzines en tienda ({authorItem.fanzines.length}):
+                          </span>
+                        </div>
+
+                        {authorItem.fanzines.length === 0 ? (
+                          <p className="text-[11px] text-stone-400 italic">
+                            Aún no tiene fanzines asignados.
+                          </p>
+                        ) : (
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {authorItem.fanzines.slice(0, 4).map((fz) => (
+                              <div
+                                key={fz.id}
+                                title={fz.title}
+                                className="w-9 h-12 rounded-lg bg-stone-100 border border-stone-200 overflow-hidden flex-shrink-0 relative group"
+                              >
+                                {fz.cover_url ? (
+                                  <img
+                                    src={fz.cover_url}
+                                    alt={fz.title}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-[9px] font-bold text-stone-400 p-0.5 text-center leading-tight">
+                                    {fz.title.slice(0, 3)}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {authorItem.fanzines.length > 4 && (
+                              <span className="text-[10px] text-stone-500 font-semibold pl-1">
+                                +{authorItem.fanzines.length - 4} más
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Acciones de la tarjeta */}
+                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditAuthor(authorItem.name)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-brand-50 hover:text-brand-600 text-stone-700 text-xs font-semibold transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Editar Ficha</span>
+                      </button>
+
+                      {!isAngelinaAuthor && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAuthor(authorItem.name)}
+                          title="Eliminar autor"
+                          className="p-1.5 rounded-xl text-stone-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -2767,16 +3132,60 @@ export default function AdminPage() {
               {/* Autor y Categoría */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Autor / Autora
-                  </label>
-                  <input
-                    type="text"
-                    value={editFAuthor}
-                    onChange={(e) => setEditFAuthor(e.target.value)}
-                    placeholder="Ej: Angelina"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
-                  />
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-stone-700">
+                      Autor / Autora *
+                    </label>
+                  </div>
+
+                  <select
+                    value={authorOptions.includes(editFAuthor) && !isEditAuthorCustom ? editFAuthor : '__custom__'}
+                    onChange={(e) => {
+                      if (e.target.value === '__custom__') {
+                        setIsEditAuthorCustom(true);
+                        setEditFAuthor('');
+                      } else {
+                        setIsEditAuthorCustom(false);
+                        setEditFAuthor(e.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 bg-white text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-medium cursor-pointer"
+                  >
+                    <option value="" disabled>Selecciona un autor/a...</option>
+                    {authorOptions.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                    <option value="__custom__">➕ Escribir otro / Nuevo autor...</option>
+                  </select>
+
+                  {isEditAuthorCustom && (
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        required
+                        placeholder="Escribe el nombre del autor/a..."
+                        value={editFAuthor}
+                        onChange={(e) => setEditFAuthor(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl border-2 border-brand-500 bg-brand-50/20 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        autoFocus
+                      />
+                      <div className="flex items-center justify-between mt-1 text-[10px] text-stone-500">
+                        <span>Se actualizará para este fanzine.</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsEditAuthorCustom(false);
+                            setEditFAuthor(editingFanzine?.author || authorOptions[0] || 'Angelina');
+                          }}
+                          className="text-brand-600 hover:underline"
+                        >
+                          Volver a lista
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2900,18 +3309,22 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* MODAL: EDITAR FICHA DE AUTOR */}
+      {/* MODAL: EDITAR / CREAR FICHA DE AUTOR */}
       {editingAuthor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-5">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200/60">
                   <User className="w-5 h-5 text-brand-600" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-stone-900 text-base">Ficha de Autor / Autora</h3>
-                  <p className="text-xs text-stone-500">{editingAuthor.name}</p>
+                  <h3 className="font-bold text-stone-900 text-base">
+                    {isNewAuthor ? 'Nuevo Autor / Autora' : 'Ficha de Autor / Autora'}
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    {isNewAuthor ? 'Registra un creador/a para el catálogo' : editingAuthor.name}
+                  </p>
                 </div>
               </div>
 
@@ -2944,32 +3357,44 @@ export default function AdminPage() {
             <form onSubmit={handleSaveAuthor} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Nombre del Autor / Autora
+                  Nombre del Autor / Autora *
                 </label>
                 <input
                   type="text"
-                  disabled
-                  value={editingAuthor.name}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 bg-stone-100 text-stone-600 font-semibold cursor-not-allowed"
+                  required
+                  placeholder="Ej: Angelina o Martín García"
+                  value={authorNameInput}
+                  onChange={(e) => setAuthorNameInput(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-semibold"
                 />
+                {!isNewAuthor && editingAuthor.name && authorNameInput.trim() !== editingAuthor.name && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    Nota: al cambiar el nombre, se actualizarán automáticamente sus fanzines asociados en el catálogo.
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Usuario o Enlace de Instagram
+                  Usuario de Instagram (sin @)
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ej: @angelina.fanzines o martin_arte"
-                  value={authorInstagram}
-                  onChange={(e) => setAuthorInstagram(e.target.value)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-xs">
+                    @
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="angelina.fanzines"
+                    value={authorInstagram}
+                    onChange={(e) => setAuthorInstagram(e.target.value.replace(/^@+/, ''))}
+                    className="w-full pl-7 pr-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Biografía / Presentación Pública
+                  Biografía / Semblanza Literaria
                 </label>
                 <textarea
                   rows={4}
@@ -2978,6 +3403,65 @@ export default function AdminPage() {
                   onChange={(e) => setAuthorBio(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 leading-relaxed"
                 />
+              </div>
+
+              {/* Foto o Avatar */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Foto o Avatar de Perfil
+                </label>
+
+                {authorAvatarPreview && (
+                  <div className="flex items-center gap-3 mb-2 p-2 rounded-xl bg-stone-50 border border-stone-200">
+                    <img
+                      src={authorAvatarPreview}
+                      alt="Preview"
+                      className="w-12 h-12 rounded-xl object-cover border border-stone-200 flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0 text-[11px] text-stone-600 truncate">
+                      {authorAvatarFile ? authorAvatarFile.name : 'Foto actual'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthorAvatarFile(null);
+                        setAuthorAvatarPreview(null);
+                        setAuthorAvatarUrl('');
+                      }}
+                      className="text-stone-400 hover:text-red-600 p-1 rounded-lg"
+                      title="Quitar foto"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setAuthorAvatarFile(file);
+                        setAuthorAvatarPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                    className="w-full text-xs text-stone-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-stone-100 file:text-stone-700 hover:file:bg-stone-200 cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    placeholder="O pega aquí una URL de imagen..."
+                    value={authorAvatarUrl}
+                    onChange={(e) => {
+                      setAuthorAvatarUrl(e.target.value);
+                      if (e.target.value && !authorAvatarFile) {
+                        setAuthorAvatarPreview(e.target.value);
+                      }
+                    }}
+                    className="w-full px-3 py-1.5 text-xs rounded-xl border border-stone-200 text-stone-600 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  />
+                </div>
               </div>
 
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100">

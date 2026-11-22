@@ -25,10 +25,19 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
 * **Controles y Protección de Obra:** Botones de Zoom (+ / -), modo auto, pantalla completa y bloqueo de clic derecho. **Modalidad 100% lectura online:** se elimina la descarga directa del archivo PDF para proteger los derechos y autoría de Angelina, impidiendo la distribución no autorizada del archivo digital.
 
 ### 2. 🏷️ Ficha Editorial, Perfil de Autores y Categorías Dinámicas
-* **Perfil / Ficha de Autor/a en 1 Toque:**
+* **Pestaña Dedicada "Autores" en el Panel de Administración:**
+  * Vista centralizada para gestionar todos los autores/as y colaboradores.
+  * Buscador en tiempo real de autores por nombre, Instagram o biografía.
+  * Botón **"+ Registrar Nuevo Autor"** para dar de alta perfiles antes o después de subir sus obras.
+  * Edición completa de fichas: Nombre, usuario de Instagram (con link directo), biografía o semblanza literaria, y carga de foto/avatar (subiendo archivo o indicando URL).
+  * Si se renombra un autor, el sistema actualiza automáticamente todas sus obras publicadas.
+* **Menú Desplegable de Autores al Crear o Editar Fanzines:**
+  * Al subir un nuevo fanzine o editar uno existente, el campo *Autor / Autora* ofrece un selector desplegable (`<select>`) con todos los autores registrados en la plataforma.
+  * Incluye la opción `➕ Escribir otro / Nuevo autor...` para ingresar un autor nuevo al instante sin salir del formulario.
+  * Acceso directo con un clic a "Gestionar" para revisar perfiles.
+* **Perfil / Ficha de Autor/a en 1 Toque en la Tienda Pública:**
   * Al hacer clic en el nombre de cualquier autor/a en las tarjetas del catálogo público, se abre una ventana modal con su perfil completo: avatar/foto, biografía editorial, enlace directo a su cuenta de Instagram y listado con portadas de todas sus obras publicadas en la tienda.
   * Incluye botón para filtrar instantáneamente el catálogo por ese autor/a.
-  * **Administración de Perfiles:** En el panel de control (`/admin`), la pestaña "Rendición & Ventas" cuenta con el botón *"Ficha de Autor"* para actualizar en cualquier momento la bio, Instagram y foto de cada colaborador/a.
 * **Campos editoriales completos:**
   * **Autor / Autora:** Identifica a la creadora o coautores (ej. *"Angelina"*, *"Angelina & Martín"*).
   * **Género / Categoría Autodefinible:** Angelina puede escribir cualquier género nuevo al subir o editar una obra (ej. *"Crónica & Murga"*, *"Terror"*, *"Poesía"*, *"Historietas"*). El sistema lo memoriza dinámicamente sin necesidad de listas fijas o intervenciones técnicas.
