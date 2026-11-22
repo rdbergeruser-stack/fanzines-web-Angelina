@@ -179,24 +179,96 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const { id, is_active, title, description, price, author, category, pages_count, edition_number } = body;
+    const contentType = request.headers.get('content-type') || '';
+    let id = '';
+    const updates: any = {};
+    let coverFile: File | null = null;
+
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      id = (formData.get('id') as string) || '';
+
+      const is_active_str = formData.get('is_active');
+      if (is_active_str !== null && is_active_str !== undefined) {
+        updates.is_active = is_active_str === 'true';
+      }
+      const title = formData.get('title') as string | null;
+      if (title !== null && title !== undefined) updates.title = title.trim();
+
+      const description = formData.get('description') as string | null;
+      if (description !== null && description !== undefined) updates.description = description.trim();
+
+      const priceStr = formData.get('price') as string | null;
+      if (priceStr !== null && priceStr !== undefined) updates.price = parseFloat(priceStr) || 0;
+
+      const author = formData.get('author') as string | null;
+      if (author !== null && author !== undefined) updates.author = author.trim() || null;
+
+      const category = formData.get('category') as string | null;
+      if (category !== null && category !== undefined) updates.category = category.trim() || null;
+
+      const pagesCountStr = (formData.get('pages_count') || formData.get('pagesCount')) as string | null;
+      if (pagesCountStr !== null && pagesCountStr !== undefined) {
+        const parsed = parseInt(pagesCountStr, 10);
+        updates.pages_count = isNaN(parsed) ? null : parsed;
+      }
+
+      const editionNumber = (formData.get('edition_number') || formData.get('editionNumber')) as string | null;
+      if (editionNumber !== null && editionNumber !== undefined) updates.edition_number = editionNumber.trim() || null;
+
+      coverFile = formData.get('cover') as File | null;
+    } else {
+      const body = await request.json();
+      id = body.id;
+      if (typeof body.is_active === 'boolean') updates.is_active = body.is_active;
+      if (body.title) updates.title = body.title.trim();
+      if (body.description !== undefined) updates.description = body.description?.trim() || '';
+      if (body.price !== undefined) updates.price = parseFloat(body.price) || 0;
+      if (body.author !== undefined) updates.author = body.author?.trim() || null;
+      if (body.category !== undefined) updates.category = body.category?.trim() || null;
+      if (body.pages_count !== undefined) updates.pages_count = body.pages_count ? parseInt(body.pages_count, 10) : null;
+      if (body.edition_number !== undefined) updates.edition_number = body.edition_number?.trim() || null;
+    }
+
     if (!id) return NextResponse.json({ error: 'Falta ID' }, { status: 400 });
 
-    const updates: any = {};
-    if (typeof is_active === 'boolean') updates.is_active = is_active;
-    if (title) updates.title = title;
-    if (description !== undefined) updates.description = description;
-    if (price !== undefined) updates.price = price;
-    if (author !== undefined) updates.author = author?.trim() || null;
-    if (category !== undefined) updates.category = category?.trim() || null;
-    if (pages_count !== undefined) updates.pages_count = pages_count ? parseInt(pages_count, 10) : null;
-    if (edition_number !== undefined) updates.edition_number = edition_number?.trim() || null;
+    // Si se subió una nueva portada
+    if (coverFile && coverFile.size > 0) {
+      const ext = coverFile.name.split('.').pop() || 'jpg';
+      const timestamp = Date.now();
+      const cleanTitle = (updates.title || 'cover').toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 30);
+      const coverFileName = `${timestamp}_${cleanTitle}.${ext}`;
+      const coverBytes = await coverFile.arrayBuffer();
 
-    const { error } = await admin.from('fanzines').update(updates).eq('id', id);
+      const { error: coverUploadError } = await admin.storage
+        .from('fanzines-covers')
+        .upload(coverFileName, coverBytes, {
+          contentType: coverFile.type,
+          upsert: false,
+        });
+
+      if (coverUploadError) {
+        console.error('Error uploading cover on edit:', coverUploadError);
+        return NextResponse.json({ error: 'Error al subir la portada: ' + coverUploadError.message }, { status: 500 });
+      }
+
+      const { data: { publicUrl } } = admin.storage
+        .from('fanzines-covers')
+        .getPublicUrl(coverFileName);
+
+      updates.cover_url = publicUrl;
+    }
+
+    const { data: updatedFanzine, error } = await admin
+      .from('fanzines')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, fanzine: updatedFanzine });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

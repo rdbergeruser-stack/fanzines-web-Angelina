@@ -86,6 +86,8 @@ export default function AdminPage() {
   const [editFCategory, setEditFCategory] = useState('');
   const [editFPagesCount, setEditFPagesCount] = useState('');
   const [editFEditionNumber, setEditFEditionNumber] = useState('');
+  const [editFCover, setEditFCover] = useState<File | null>(null);
+  const [editFCoverPreview, setEditFCoverPreview] = useState<string | null>(null);
   const [savingFanzine, setSavingFanzine] = useState(false);
   const [editFMsg, setEditFMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
@@ -249,6 +251,8 @@ export default function AdminPage() {
     setEditFCategory(f.category || '');
     setEditFPagesCount(f.pages_count?.toString() || '');
     setEditFEditionNumber(f.edition_number || '');
+    setEditFCover(null);
+    setEditFCoverPreview(f.cover_url || null);
     setEditFMsg(null);
   };
 
@@ -260,25 +264,30 @@ export default function AdminPage() {
     setEditFMsg(null);
 
     try {
+      const fd = new FormData();
+      fd.append('id', editingFanzine.id);
+      fd.append('title', editFTitle);
+      fd.append('description', editFDesc);
+      fd.append('price', editFPrice || '0');
+      fd.append('author', editFAuthor);
+      fd.append('category', editFCategory);
+      fd.append('pages_count', editFPagesCount);
+      fd.append('edition_number', editFEditionNumber);
+      if (editFCover) {
+        fd.append('cover', editFCover);
+      }
+
       const res = await fetch('/api/admin/fanzines', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingFanzine.id,
-          title: editFTitle,
-          description: editFDesc,
-          price: parseFloat(editFPrice) || 0,
-          author: editFAuthor,
-          category: editFCategory,
-          pages_count: editFPagesCount ? parseInt(editFPagesCount, 10) : null,
-          edition_number: editFEditionNumber,
-        }),
+        body: fd,
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar fanzine');
 
-      setEditFMsg({ type: 'ok', text: '¡Fanzine actualizado correctamente!' });
+      setEditFMsg({ type: 'ok', text: '¡Fanzine y portada actualizados correctamente!' });
+
+      const updatedCoverUrl = data.fanzine?.cover_url !== undefined ? data.fanzine.cover_url : editingFanzine.cover_url;
 
       setFanzines((prev) =>
         prev.map((f) =>
@@ -292,6 +301,7 @@ export default function AdminPage() {
                 category: editFCategory,
                 pages_count: editFPagesCount ? parseInt(editFPagesCount, 10) : null,
                 edition_number: editFEditionNumber,
+                cover_url: updatedCoverUrl,
               }
             : f
         )
@@ -299,6 +309,8 @@ export default function AdminPage() {
 
       setTimeout(() => {
         setEditingFanzine(null);
+        setEditFCover(null);
+        setEditFCoverPreview(null);
       }, 1000);
     } catch (err: any) {
       setEditFMsg({ type: 'err', text: err.message || 'Error al guardar' });
@@ -2591,6 +2603,76 @@ export default function AdminPage() {
                   onChange={(e) => setEditFTitle(e.target.value)}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
                 />
+              </div>
+
+              {/* Imagen de Portada (Cambiar o agregar) */}
+              <div className="bg-stone-50 border border-stone-200/80 p-3.5 rounded-2xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-stone-800">
+                    Imagen de Portada
+                  </label>
+                  <span className="text-[10px] text-stone-400 font-medium">Recomendado: 900 × 1200 px (3:4)</span>
+                </div>
+
+                <div className="flex items-center gap-3.5">
+                  {/* Vista previa miniatura */}
+                  <div className="w-16 h-21 aspect-[3/4] bg-stone-200 rounded-xl overflow-hidden flex-shrink-0 border border-stone-300 relative shadow-sm">
+                    {editFCoverPreview ? (
+                      <img
+                        src={editFCoverPreview}
+                        alt="Vista previa"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-stone-400 p-1 text-center">
+                        <BookOpen className="w-5 h-5 mb-0.5 stroke-1" />
+                        <span className="text-[9px]">Sin portada</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-stone-600 mb-2">
+                      {editFCover
+                        ? `Nueva imagen lista para guardar: ${editFCover.name}`
+                        : editFCoverPreview
+                        ? 'Portada actual cargada. Pulsa el botón si deseas reemplazarla.'
+                        : 'Aún no tiene portada. Sube una imagen en JPG, PNG o WebP.'}
+                    </p>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-stone-100 border border-stone-300 text-stone-700 text-xs font-semibold shadow-sm transition-all">
+                        <Upload className="w-3.5 h-3.5 text-brand-600" />
+                        <span>{editFCoverPreview ? 'Seleccionar otra imagen' : 'Subir portada'}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setEditFCover(file);
+                              setEditFCoverPreview(URL.createObjectURL(file));
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {editFCover && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditFCover(null);
+                            setEditFCoverPreview(editingFanzine.cover_url || null);
+                          }}
+                          className="text-stone-500 hover:text-red-600 text-xs underline"
+                        >
+                          Deshacer
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Autor y Categoría */}
