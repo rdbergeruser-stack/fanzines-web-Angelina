@@ -131,11 +131,29 @@ export default function MisFanzinesPage() {
 
                     <div className="p-5 flex-1 flex flex-col justify-between">
                       <div>
+                        {item.fanzine.category && (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100 text-[10px] font-semibold mb-2">
+                            {item.fanzine.category}
+                          </span>
+                        )}
                         <Link href={`/leer/${item.fanzine.id}`}>
                           <h3 className="font-bold text-stone-900 leading-snug hover:text-brand-600 transition-colors">
                             {item.fanzine.title}
                           </h3>
                         </Link>
+                        {(item.fanzine.author || item.fanzine.pages_count || item.fanzine.edition_number) && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500 mt-1 mb-1.5">
+                            {item.fanzine.author && (
+                              <span className="font-medium text-stone-700">Por {item.fanzine.author}</span>
+                            )}
+                            {item.fanzine.pages_count && (
+                              <span>· {item.fanzine.pages_count} págs.</span>
+                            )}
+                            {item.fanzine.edition_number && (
+                              <span>· {item.fanzine.edition_number}</span>
+                            )}
+                          </div>
+                        )}
                         {item.fanzine.description && (
                           <p className="text-xs text-stone-500 mt-1 line-clamp-2">
                             {item.fanzine.description}
@@ -189,7 +207,15 @@ export default function MisFanzinesPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
+                      {item.fanzine.category && (
+                        <span className="inline-block px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-semibold mb-1">
+                          {item.fanzine.category}
+                        </span>
+                      )}
                       <h4 className="font-bold text-sm text-stone-900 truncate">{item.fanzine.title}</h4>
+                      {item.fanzine.author && (
+                        <p className="text-xs text-stone-500 truncate">Por {item.fanzine.author}</p>
+                      )}
                       <p className="text-xs text-amber-700 font-medium mt-1">
                         Acceso en preparación por Angelina
                       </p>

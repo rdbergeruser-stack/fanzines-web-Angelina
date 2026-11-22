@@ -33,6 +33,9 @@ import {
   ExternalLink,
   Phone,
   Send,
+  Pencil,
+  Tag,
+  Layers,
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -54,10 +57,26 @@ export default function AdminPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [newPrice, setNewPrice] = useState('');
+  const [newAuthor, setNewAuthor] = useState('Angelina');
+  const [newCategory, setNewCategory] = useState('');
+  const [newPagesCount, setNewPagesCount] = useState('');
+  const [newEditionNumber, setNewEditionNumber] = useState('');
   const [newPdf, setNewPdf] = useState<File | null>(null);
   const [newCover, setNewCover] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+
+  // Modal para EDITAR fanzine
+  const [editingFanzine, setEditingFanzine] = useState<Fanzine | null>(null);
+  const [editFTitle, setEditFTitle] = useState('');
+  const [editFDesc, setEditFDesc] = useState('');
+  const [editFPrice, setEditFPrice] = useState('');
+  const [editFAuthor, setEditFAuthor] = useState('Angelina');
+  const [editFCategory, setEditFCategory] = useState('');
+  const [editFPagesCount, setEditFPagesCount] = useState('');
+  const [editFEditionNumber, setEditFEditionNumber] = useState('');
+  const [savingFanzine, setSavingFanzine] = useState(false);
+  const [editFMsg, setEditFMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   // Búsqueda de usuarios
   const [searchUser, setSearchUser] = useState('');
@@ -170,6 +189,10 @@ export default function AdminPage() {
       fd.append('title', newTitle);
       fd.append('description', newDesc);
       fd.append('price', newPrice || '0');
+      fd.append('author', newAuthor || '');
+      fd.append('category', newCategory || '');
+      fd.append('pagesCount', newPagesCount || '');
+      fd.append('editionNumber', newEditionNumber || '');
       fd.append('pdf', newPdf);
       if (newCover) fd.append('cover', newCover);
 
@@ -185,6 +208,10 @@ export default function AdminPage() {
       setNewTitle('');
       setNewDesc('');
       setNewPrice('');
+      setNewAuthor('Angelina');
+      setNewCategory('');
+      setNewPagesCount('');
+      setNewEditionNumber('');
       setNewPdf(null);
       setNewCover(null);
 
@@ -198,6 +225,74 @@ export default function AdminPage() {
       setUploadMsg({ type: 'err', text: err.message || 'Error en la carga' });
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Abrir modal de edición de fanzine
+  const openEditFanzine = (f: Fanzine) => {
+    setEditingFanzine(f);
+    setEditFTitle(f.title || '');
+    setEditFDesc(f.description || '');
+    setEditFPrice(f.price?.toString() || '0');
+    setEditFAuthor(f.author || 'Angelina');
+    setEditFCategory(f.category || '');
+    setEditFPagesCount(f.pages_count?.toString() || '');
+    setEditFEditionNumber(f.edition_number || '');
+    setEditFMsg(null);
+  };
+
+  // Guardar edición de fanzine
+  const handleSaveFanzine = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFanzine) return;
+    setSavingFanzine(true);
+    setEditFMsg(null);
+
+    try {
+      const res = await fetch('/api/admin/fanzines', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingFanzine.id,
+          title: editFTitle,
+          description: editFDesc,
+          price: parseFloat(editFPrice) || 0,
+          author: editFAuthor,
+          category: editFCategory,
+          pages_count: editFPagesCount ? parseInt(editFPagesCount, 10) : null,
+          edition_number: editFEditionNumber,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar fanzine');
+
+      setEditFMsg({ type: 'ok', text: '¡Fanzine actualizado correctamente!' });
+
+      setFanzines((prev) =>
+        prev.map((f) =>
+          f.id === editingFanzine.id
+            ? {
+                ...f,
+                title: editFTitle,
+                description: editFDesc,
+                price: parseFloat(editFPrice) || 0,
+                author: editFAuthor,
+                category: editFCategory,
+                pages_count: editFPagesCount ? parseInt(editFPagesCount, 10) : null,
+                edition_number: editFEditionNumber,
+              }
+            : f
+        )
+      );
+
+      setTimeout(() => {
+        setEditingFanzine(null);
+      }, 1000);
+    } catch (err: any) {
+      setEditFMsg({ type: 'err', text: err.message || 'Error al guardar' });
+    } finally {
+      setSavingFanzine(false);
     }
   };
 
@@ -542,6 +637,10 @@ export default function AdminPage() {
       (p.full_name && p.full_name.toLowerCase().includes(searchUser.toLowerCase()))
   );
 
+  const existingCategories = Array.from(
+    new Set(fanzines.map((f) => f.category?.trim()).filter(Boolean))
+  ) as string[];
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
       {/* Header */}
@@ -658,11 +757,103 @@ export default function AdminPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Ej: Fanzine N° 1 - Recuerdos"
+                    placeholder="Ej: La murga se va"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
                   />
+                </div>
+
+                {/* Autor y Género */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Autor / Autora
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Angelina"
+                      value={newAuthor}
+                      onChange={(e) => setNewAuthor(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-stone-700">
+                        Género / Categoría
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      list="categories-list"
+                      placeholder="Ej: Terror, Poesía..."
+                      value={newCategory}
+                      onChange={(e) => setNewCategory(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                    />
+                    <datalist id="categories-list">
+                      {existingCategories.map((cat) => (
+                        <option key={cat} value={cat} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Sugerencias de categorías autodefinidas */}
+                {existingCategories.length > 0 && (
+                  <div className="bg-stone-50 border border-stone-200/80 p-2.5 rounded-xl space-y-1">
+                    <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider block">
+                      Categorías existentes (toca para elegir):
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {existingCategories.map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setNewCategory(cat)}
+                          className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${
+                            newCategory.toLowerCase() === cat.toLowerCase()
+                              ? 'bg-brand-600 text-white border-brand-600 font-semibold shadow-xs'
+                              : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-200'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Páginas y Edición / N° */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Cantidad de Páginas
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Ej: 16"
+                      value={newPagesCount}
+                      onChange={(e) => setNewPagesCount(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      N° Edición / Año
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: N° 1 o 2024"
+                      value={newEditionNumber}
+                      onChange={(e) => setNewEditionNumber(e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -670,7 +861,7 @@ export default function AdminPage() {
                     Descripción / Sinopsis
                   </label>
                   <textarea
-                    rows={3}
+                    rows={2}
                     placeholder="Breve reseña o texto de presentación..."
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
@@ -688,7 +879,7 @@ export default function AdminPage() {
                     placeholder="0"
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                    className="w-full px-3 py-2 text-sm rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-semibold"
                   />
                 </div>
 
@@ -753,15 +944,36 @@ export default function AdminPage() {
                       )}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-bold text-stone-900">{f.title}</h3>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
                           ${f.price}
                         </span>
+                        {f.category && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded-full">
+                            {f.category}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-stone-500 mt-1 line-clamp-1 max-w-md">
-                        {f.description || 'Sin descripción'}
-                      </p>
+
+                      <div className="flex items-center gap-2 text-xs text-stone-500 mt-1 flex-wrap">
+                        {f.author && (
+                          <span>Por <strong className="text-stone-700">{f.author}</strong></span>
+                        )}
+                        {f.pages_count && (
+                          <span className="font-mono text-[11px] text-stone-400">• {f.pages_count} págs</span>
+                        )}
+                        {f.edition_number && (
+                          <span className="text-[11px] text-stone-400">• {f.edition_number}</span>
+                        )}
+                      </div>
+
+                      {f.description && (
+                        <p className="text-xs text-stone-500 mt-1 line-clamp-1 max-w-md">
+                          {f.description}
+                        </p>
+                      )}
+
                       <div className="flex items-center gap-2 mt-2">
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
@@ -780,6 +992,13 @@ export default function AdminPage() {
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-center">
+                    <button
+                      onClick={() => openEditFanzine(f)}
+                      title="Editar datos del fanzine"
+                      className="p-2 rounded-xl border border-stone-200 hover:bg-stone-50 hover:border-brand-300 text-stone-600 hover:text-brand-600 transition-colors"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleToggleActive(f)}
                       title={f.is_active ? 'Ocultar del catálogo' : 'Hacer visible'}
@@ -1593,6 +1812,197 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: EDITAR DATOS DEL FANZINE */}
+      {editingFanzine && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-stone-200 relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-stone-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center border border-brand-200/60">
+                  <Pencil className="w-5 h-5 text-brand-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-900 text-base">Editar Fanzine</h3>
+                  <p className="text-xs text-stone-500 truncate max-w-[280px]">{editingFanzine.title}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setEditingFanzine(null)}
+                className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editFMsg && (
+              <div
+                className={`mb-4 p-3 rounded-xl text-xs flex items-center gap-2 ${
+                  editFMsg.type === 'ok'
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
+                }`}
+              >
+                {editFMsg.type === 'ok' ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                )}
+                <span>{editFMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveFanzine} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Título del Fanzine *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFTitle}
+                  onChange={(e) => setEditFTitle(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                />
+              </div>
+
+              {/* Autor y Categoría */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Autor / Autora
+                  </label>
+                  <input
+                    type="text"
+                    value={editFAuthor}
+                    onChange={(e) => setEditFAuthor(e.target.value)}
+                    placeholder="Ej: Angelina"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Género / Categoría
+                  </label>
+                  <input
+                    type="text"
+                    list="edit-categories-list"
+                    value={editFCategory}
+                    onChange={(e) => setEditFCategory(e.target.value)}
+                    placeholder="Ej: Terror, Poesía..."
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                  <datalist id="edit-categories-list">
+                    {existingCategories.map((cat) => (
+                      <option key={cat} value={cat} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Categorías existentes como botones rápidos */}
+              {existingCategories.length > 0 && (
+                <div className="bg-stone-50 border border-stone-200/80 p-2.5 rounded-xl space-y-1">
+                  <span className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider block">
+                    Tocar categoría existente:
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {existingCategories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setEditFCategory(cat)}
+                        className={`text-[10px] px-2 py-0.5 rounded-md border transition-all ${
+                          editFCategory.toLowerCase() === cat.toLowerCase()
+                            ? 'bg-brand-600 text-white border-brand-600 font-semibold'
+                            : 'bg-white hover:bg-stone-100 text-stone-700 border-stone-200'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Páginas y Edición */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Cantidad de Páginas
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ej: 16"
+                    value={editFPagesCount}
+                    onChange={(e) => setEditFPagesCount(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    N° Edición / Año
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: N° 1 o 2024"
+                    value={editFEditionNumber}
+                    onChange={(e) => setEditFEditionNumber(e.target.value)}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Precio ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={editFPrice}
+                  onChange={(e) => setEditFPrice(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600 font-semibold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Descripción / Sinopsis
+                </label>
+                <textarea
+                  rows={3}
+                  value={editFDesc}
+                  onChange={(e) => setEditFDesc(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-600"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingFanzine(null)}
+                  className="py-2 px-3 text-xs font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFanzine}
+                  className="py-2 px-4 text-xs font-semibold text-white bg-brand-600 hover:bg-brand-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {savingFanzine ? 'Guardando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

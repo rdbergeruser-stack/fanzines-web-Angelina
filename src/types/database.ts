@@ -15,6 +15,10 @@ export interface Fanzine {
   title: string;
   description: string | null;
   price: number;
+  author?: string | null;
+  category?: string | null;
+  pages_count?: number | null;
+  edition_number?: string | null;
   cover_url: string | null;
   pdf_path: string;
   is_active: boolean;

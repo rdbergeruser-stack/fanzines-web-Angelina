@@ -31,8 +31,21 @@ export default function HomePage() {
   const [referenceCode, setReferenceCode] = useState('');
   const [notifying, setNotifying] = useState(false);
   const [notifySuccess, setNotifySuccess] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
 
   const paymentInfo = process.env.NEXT_PUBLIC_PAYMENT_INFO || 'Alias: angelina.fanzines | CBU: 0000003100010000000000';
+
+  const categories = [
+    'Todos',
+    ...(Array.from(new Set(fanzines.map((f) => f.category?.trim()).filter(Boolean))) as string[]),
+  ];
+
+  const filteredFanzines =
+    selectedCategory === 'Todos'
+      ? fanzines
+      : fanzines.filter(
+          (f) => f.category?.trim().toLowerCase() === selectedCategory.toLowerCase()
+        );
 
   useEffect(() => {
     async function loadData() {
@@ -117,20 +130,42 @@ export default function HomePage() {
           <span>Fanzines & Publicaciones Digitales</span>
         </div>
         <h1 className="text-4xl sm:text-5xl font-black text-stone-900 tracking-tight leading-tight">
-          Historias y arte en formato <span className="text-brand-600">PDF</span>
+          Historias y arte en formato <span className="text-brand-600">Digital</span>
         </h1>
         <p className="mt-4 text-base sm:text-lg text-stone-600 leading-relaxed">
-          Explora los fanzines, apoya el trabajo independiente y descárgalos directamente en formato PDF para disfrutar en cualquier pantalla.
+          Explora los fanzines, apoya el trabajo independiente y léelos online directamente en pantalla desde cualquier dispositivo.
         </p>
       </div>
 
       {/* Catálogo de Fanzines */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-stone-900">Catálogo Disponible</h2>
           <p className="text-sm text-stone-500">Selecciona el fanzine que quieras sumar a tu biblioteca</p>
         </div>
       </div>
+
+      {/* Filtros de Categorías dinámicas */}
+      {categories.length > 1 && (
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none mb-8">
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-brand-600 text-white shadow-sm shadow-brand-500/20'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
@@ -142,17 +177,31 @@ export default function HomePage() {
             </div>
           ))}
         </div>
-      ) : fanzines.length === 0 ? (
+      ) : filteredFanzines.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-dashed border-stone-300 max-w-lg mx-auto">
           <BookOpen className="w-12 h-12 text-stone-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-stone-800">No hay fanzines cargados aún</h3>
+          <h3 className="text-lg font-semibold text-stone-800">
+            {selectedCategory === 'Todos'
+              ? 'No hay fanzines cargados aún'
+              : `No hay fanzines en la categoría "${selectedCategory}"`}
+          </h3>
           <p className="text-sm text-stone-500 mt-1">
-            Muy pronto Angelina estará subiendo nuevas publicaciones.
+            {selectedCategory === 'Todos'
+              ? 'Muy pronto Angelina estará subiendo nuevas publicaciones.'
+              : 'Selecciona otra categoría o explora todas las publicaciones.'}
           </p>
+          {selectedCategory !== 'Todos' && (
+            <button
+              onClick={() => setSelectedCategory('Todos')}
+              className="mt-4 px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-semibold rounded-xl transition-colors"
+            >
+              Ver todos los fanzines
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {fanzines.map((fanzine) => {
+          {filteredFanzines.map((fanzine) => {
             const status = userAccess[fanzine.id];
             const isApproved = status === 'approved';
             const isPending = status === 'pending';
@@ -201,7 +250,28 @@ export default function HomePage() {
                 {/* Contenido */}
                 <div className="p-6 flex-1 flex flex-col justify-between">
                   <div>
+                    {fanzine.category && (
+                      <span className="inline-block px-2.5 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100 text-[11px] font-semibold mb-2">
+                        {fanzine.category}
+                      </span>
+                    )}
+
                     <h3 className="font-bold text-lg text-stone-900 leading-snug">{fanzine.title}</h3>
+
+                    {(fanzine.author || fanzine.pages_count || fanzine.edition_number) && (
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500 mt-1 mb-2">
+                        {fanzine.author && (
+                          <span className="font-medium text-stone-700">Por {fanzine.author}</span>
+                        )}
+                        {fanzine.pages_count && (
+                          <span>· {fanzine.pages_count} págs.</span>
+                        )}
+                        {fanzine.edition_number && (
+                          <span>· {fanzine.edition_number}</span>
+                        )}
+                      </div>
+                    )}
+
                     {fanzine.description && (
                       <p className="mt-2 text-stone-600 text-sm line-clamp-3 leading-relaxed">
                         {fanzine.description}

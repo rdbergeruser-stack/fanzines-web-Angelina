@@ -27,6 +27,11 @@ export async function POST(request: NextRequest) {
     const description = (formData.get('description') as string) || '';
     const priceStr = (formData.get('price') as string) || '0';
     const price = parseFloat(priceStr) || 0;
+    const author = (formData.get('author') as string) || null;
+    const category = (formData.get('category') as string) || null;
+    const pagesCountStr = formData.get('pagesCount') as string;
+    const pagesCount = pagesCountStr ? parseInt(pagesCountStr, 10) : null;
+    const editionNumber = (formData.get('editionNumber') as string) || null;
     const coverFile = formData.get('cover') as File | null;
     const pdfFile = formData.get('pdf') as File | null;
 
@@ -84,6 +89,10 @@ export async function POST(request: NextRequest) {
         title,
         description,
         price,
+        author: author?.trim() || null,
+        category: category?.trim() || null,
+        pages_count: isNaN(pagesCount as number) ? null : pagesCount,
+        edition_number: editionNumber?.trim() || null,
         cover_url: coverUrl,
         pdf_path: pdfFileName,
         is_active: true,
@@ -171,7 +180,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { id, is_active, title, description, price } = body;
+    const { id, is_active, title, description, price, author, category, pages_count, edition_number } = body;
     if (!id) return NextResponse.json({ error: 'Falta ID' }, { status: 400 });
 
     const updates: any = {};
@@ -179,6 +188,10 @@ export async function PATCH(request: NextRequest) {
     if (title) updates.title = title;
     if (description !== undefined) updates.description = description;
     if (price !== undefined) updates.price = price;
+    if (author !== undefined) updates.author = author?.trim() || null;
+    if (category !== undefined) updates.category = category?.trim() || null;
+    if (pages_count !== undefined) updates.pages_count = pages_count ? parseInt(pages_count, 10) : null;
+    if (edition_number !== undefined) updates.edition_number = edition_number?.trim() || null;
 
     const { error } = await admin.from('fanzines').update(updates).eq('id', id);
     if (error) throw error;
