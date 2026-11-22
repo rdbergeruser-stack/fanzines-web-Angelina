@@ -18,7 +18,17 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
   * **Auto-ajuste:** Optimizado para pantallas móviles HD y Retina.
 * **Controles y Protección de Obra:** Botones de Zoom (+ / -), modo auto, pantalla completa y bloqueo de clic derecho. **Modalidad 100% lectura online:** se elimina la descarga directa del archivo PDF para proteger los derechos y autoría de Angelina, impidiendo la distribución no autorizada del archivo digital.
 
-### 2. 📱 Integración con WhatsApp y Agenda de Compradores
+### 2. 🏷️ Ficha Editorial y Categorías Dinámicas Autodefinibles
+* **Campos editoriales completos:**
+  * **Autor / Autora:** Identifica a la creadora o coautores (ej. *"Angelina"*, *"Angelina & Martín"*).
+  * **Género / Categoría Autodefinible:** Angelina puede escribir cualquier género nuevo al subir o editar una obra (ej. *"Crónica & Murga"*, *"Terror"*, *"Poesía"*, *"Historietas"*). El sistema lo memoriza dinámicamente sin necesidad de listas fijas o intervenciones técnicas.
+  * **Sugerencias y Chips Rápidos:** Al crear o editar fanzines, el formulario ofrece autocompletado inteligente (`<datalist>`) y botones interactivos de 1 clic con todos los géneros ya existentes.
+  * **Cantidad de Páginas:** Registro del número de páginas para que los lectores conozcan la extensión de la obra.
+  * **N° de Edición o Año:** Permite documentar la tirada (ej. *"N° 1"*, *"Edición 2024"*).
+* **Filtros en el Catálogo Público:** La página principal genera automáticamente barras de filtros por categoría para que los visitantes descubran y filtren las publicaciones con un solo toque.
+* **Edición de Fanzines Existentes:** Botón de edición rápida con modal en el panel de control para actualizar títulos, autores, categorías, páginas, precios y descripciones en tiempo real.
+
+### 3. 📱 Integración con WhatsApp y Agenda de Compradores
 * **Agenda integrada:** Guarda el número de teléfono/WhatsApp en el perfil de cada usuario al crearlo o editarlo.
 * **Auto-guardado inteligente:** Si la administradora escribe o corrige un número directamente en el modal de WhatsApp, se guarda automáticamente en la base de datos.
 * **Formateo internacional automático:** Adapta cualquier formato ingresado (`11 2345-6789`, `011...`, `+54 9 11...`) al estándar internacional exigido por WhatsApp (`54911...`).
@@ -27,17 +37,17 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
   * **Fanzine Habilitado:** Aviso automático con el título del fanzine adquirido y enlace directo a su biblioteca personal.
 * **Flujo "Aprobar y Avisar":** Al aprobar una compra en el panel de administración, se habilita el acceso y se abre WhatsApp listo para enviar con un solo clic.
 
-### 3. 🔒 Onboarding Seguro y Protección de Acceso
+### 4. 🔒 Onboarding Seguro y Protección de Acceso
 * **Registro administrativo exclusivo:** Registro público cerrado; solo la administradora crea cuentas para compradores autorizados, evitando cuentas spam.
 * **Primer ingreso con cambio obligatorio de contraseña:** Cada usuario nuevo recibe una clave temporal (ej. `123456`) y el flag `must_change_password`. En su primer inicio de sesión, el sistema lo redirige obligatoriamente a `/cambiar-clave` para crear su contraseña personal.
 * **Gestión total de usuarios:** La administradora puede restablecer contraseñas, actualizar nombres, teléfonos o correos en cualquier momento.
 
-### 4. 🛡️ Almacenamiento Privado y Seguridad de Archivos
+### 5. 🛡️ Almacenamiento Privado y Seguridad de Archivos
 * **Bucket Privado (`fanzines-private`):** Los archivos PDF completos nunca son accesibles mediante URLs públicas.
 * **URLs Firmadas de 60 segundos:** Solo los usuarios autenticados con acceso aprobado o la administradora pueden solicitar enlaces de lectura temporales que expiran en un minuto.
 * **Cabeceras HTTP de Lectura:** Se sirven con `Content-Disposition: inline` para alimentar exclusivamente el visor interactivo de la aplicación.
 
-### 5. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
+### 6. ⏰ Keep-Alive Cron Anti-Pausa de Supabase
 * **Endpoint de ping:** `/api/ping` ejecuta una consulta liviana a la base de datos para mantenerla activa.
 * **GitHub Actions Workflow:** Tarea automática en `.github/workflows/keep-alive.yml` que se ejecuta 4 veces al día (`0 */6 * * *`), garantizando que el proyecto de Supabase en el tier gratuito no entre en modo de reposo/pausa.
 
@@ -69,6 +79,10 @@ El esquema se encuentra documentado en [`supabase-schema.sql`](./supabase-schema
    * `id` (UUID)
    * `title` (TEXT)
    * `description` (TEXT)
+   * `author` (TEXT, autor o autora de la obra)
+   * `category` (TEXT, género o categoría autodefinible)
+   * `pages_count` (INTEGER, cantidad total de páginas)
+   * `edition_number` (TEXT, número de edición o año de publicación)
    * `price` (NUMERIC)
    * `cover_url` (TEXT)
    * `pdf_path` (TEXT, ruta en bucket privado)
@@ -129,7 +143,9 @@ npm run start
 ## 👩‍💼 Manual de Operación para la Administradora
 
 1. **Acceso al Panel:** Iniciar sesión con la cuenta de administradora y acceder a `/admin`.
-2. **Subir un Fanzine:** En la pestaña **Fanzines**, ingresar título, descripción, precio, cargar el PDF y opcionalmente una imagen de portada.
+2. **Subir o Editar un Fanzine:** 
+   * En la pestaña **Fanzines**, ingresar el título, autor/a, género/categoría (escribiendo uno nuevo o tocando un chip existente con un clic), cantidad de páginas, número de edición, precio, cargar el PDF y opcionalmente una imagen de portada.
+   * Para modificar una publicación ya existente, hacer clic en el botón del lápiz (**Editar**) en cualquier tarjeta de la lista.
 3. **Dar de alta un nuevo comprador:**
    * Ir a la pestaña **Gestión de Usuarios** -> botón **+ Crear Nuevo Usuario**.
    * Ingresar nombre, email/usuario, teléfono de WhatsApp y clave temporal.
