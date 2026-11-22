@@ -16,17 +16,27 @@ Plataforma autogestionable y segura para la publicación, venta, lectura online 
   * Toca los bordes de la pantalla para avanzar o retroceder.
   * Barra inferior flotante con navegación y contador: `Página X de Y`.
   * **Auto-ajuste:** Optimizado para pantallas móviles HD y Retina.
+* **Marcador Automático (Recordar Última Página Leída):** El lector memoriza en el navegador (`localStorage`) la página exacta en la que se quedó el lector para cada fanzine. Al reabrirlo, un aviso flotante inteligente le ofrece continuar desde donde lo dejó o reiniciar desde la página 1.
+* **Modos Visuales de Lectura (Noche / Sepia / Claro):** Barra de temas visuales en la cabecera para adaptar la experiencia a cualquier ambiente:
+  * 🌙 **Noche (Dark):** Fondo oscuro mate para leer cómodamente en la oscuridad sin cansar la vista.
+  * 📜 **Sepia:** Tonalidad papel clásico cálido (`#F4ECD8`) que emula la lectura física tradicional.
+  * ☀️ **Claro:** Fondo luminoso y nítido para lectura diurna.
+  * La preferencia de color se guarda automáticamente para todas las lecturas futuras.
 * **Controles y Protección de Obra:** Botones de Zoom (+ / -), modo auto, pantalla completa y bloqueo de clic derecho. **Modalidad 100% lectura online:** se elimina la descarga directa del archivo PDF para proteger los derechos y autoría de Angelina, impidiendo la distribución no autorizada del archivo digital.
 
-### 2. 🏷️ Ficha Editorial y Categorías Dinámicas Autodefinibles
+### 2. 🏷️ Ficha Editorial, Perfil de Autores y Categorías Dinámicas
+* **Perfil / Ficha de Autor/a en 1 Toque:**
+  * Al hacer clic en el nombre de cualquier autor/a en las tarjetas del catálogo público, se abre una ventana modal con su perfil completo: avatar/foto, biografía editorial, enlace directo a su cuenta de Instagram y listado con portadas de todas sus obras publicadas en la tienda.
+  * Incluye botón para filtrar instantáneamente el catálogo por ese autor/a.
+  * **Administración de Perfiles:** En el panel de control (`/admin`), la pestaña "Rendición & Ventas" cuenta con el botón *"Ficha de Autor"* para actualizar en cualquier momento la bio, Instagram y foto de cada colaborador/a.
 * **Campos editoriales completos:**
   * **Autor / Autora:** Identifica a la creadora o coautores (ej. *"Angelina"*, *"Angelina & Martín"*).
   * **Género / Categoría Autodefinible:** Angelina puede escribir cualquier género nuevo al subir o editar una obra (ej. *"Crónica & Murga"*, *"Terror"*, *"Poesía"*, *"Historietas"*). El sistema lo memoriza dinámicamente sin necesidad de listas fijas o intervenciones técnicas.
   * **Sugerencias y Chips Rápidos:** Al crear o editar fanzines, el formulario ofrece autocompletado inteligente (`<datalist>`) y botones interactivos de 1 clic con todos los géneros ya existentes.
   * **Cantidad de Páginas:** Registro del número de páginas para que los lectores conozcan la extensión de la obra.
   * **N° de Edición o Año:** Permite documentar la tirada (ej. *"N° 1"*, *"Edición 2024"*).
-* **Filtros en el Catálogo Público:** La página principal genera automáticamente barras de filtros por categoría para que los visitantes descubran y filtren las publicaciones con un solo toque.
-* **Edición de Fanzines Existentes:** Botón de edición rápida con modal en el panel de control para actualizar títulos, autores, categorías, páginas, precios y descripciones en tiempo real.
+* **Filtros en el Catálogo Público:** La página principal genera automáticamente barras de filtros por categoría y por autor para que los visitantes descubran y filtren las publicaciones con un solo toque.
+* **Edición de Fanzines Existentes:** Botón de edición rápida con modal en el panel de control para actualizar títulos, autores, categorías, páginas, precios, portadas y descripciones en tiempo real.
 
 ### 3. 💰 Rendición de Cuentas, Métricas y Liquidación a Autores
 * **Panel Financiero para Múltiples Autores:** La administradora centraliza los cobros y cuenta con un módulo dedicado a rendir cuentas a cada creador/a participante.
@@ -114,6 +124,13 @@ El esquema se encuentra documentado en [`supabase-schema.sql`](./supabase-schema
    * `fanzine_id` (UUID)
    * `reference_code` (TEXT)
    * `status` (`'pending'` | `'approved'` | `'rejected'`)
+   * `created_at` (TIMESTAMP WITH TIME ZONE)
+5. **`authors`:**
+   * `id` (UUID)
+   * `name` (TEXT UNIQUE, nombre del autor/a coincidente con `fanzines.author`)
+   * `bio` (TEXT, biografía o semblanza literaria)
+   * `instagram` (TEXT, usuario de Instagram sin `@` para link directo)
+   * `avatar_url` (TEXT, foto o ilustración de perfil)
    * `created_at` (TIMESTAMP WITH TIME ZONE)
 
 ---

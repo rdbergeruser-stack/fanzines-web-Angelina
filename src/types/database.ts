@@ -46,3 +46,13 @@ export interface PaymentNotification {
   profile?: Profile;
   fanzine?: Fanzine;
 }
+
+export interface Author {
+  id: string;
+  name: string;
+  bio?: string | null;
+  instagram?: string | null;
+  avatar_url?: string | null;
+  created_at: string;
+}
+

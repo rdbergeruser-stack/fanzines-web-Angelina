@@ -14,6 +14,9 @@ import {
   AlertCircle,
   RefreshCw,
   BookOpen,
+  Moon,
+  Sun,
+  Coffee,
 } from 'lucide-react';
 
 export default function LeerFanzinePage() {
@@ -32,6 +35,27 @@ export default function LeerFanzinePage() {
   const [scale, setScale] = useState<number>(1.0);
   const [isAutoFit, setIsAutoFit] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  // Modo de lectura (Noche, Sepia, Día) y Marcapáginas
+  const [readerTheme, setReaderTheme] = useState<'dark' | 'sepia' | 'light'>('dark');
+  const [resumeToast, setResumeToast] = useState<{ page: number; show: boolean }>({ page: 1, show: false });
+
+  // Cargar tema guardado al iniciar
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('fanzine_reader_theme') as 'dark' | 'sepia' | 'light' | null;
+      if (saved && ['dark', 'sepia', 'light'].includes(saved)) {
+        setReaderTheme(saved);
+      }
+    } catch (_) {}
+  }, []);
+
+  const changeTheme = (newTheme: 'dark' | 'sepia' | 'light') => {
+    setReaderTheme(newTheme);
+    try {
+      localStorage.setItem('fanzine_reader_theme', newTheme);
+    } catch (_) {}
+  };
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -98,7 +122,21 @@ export default function LeerFanzinePage() {
       const loadedDoc = await loadingTask.promise;
       setPdfDoc(loadedDoc);
       setTotalPages(loadedDoc.numPages);
-      setCurrentPage(1);
+
+      // Recordar última página leída (Marcapáginas)
+      try {
+        const savedPageStr = localStorage.getItem(`fanzine_reading_page_${fanzineId}`);
+        const savedPage = savedPageStr ? parseInt(savedPageStr, 10) : 1;
+        if (savedPage > 1 && savedPage <= loadedDoc.numPages) {
+          setCurrentPage(savedPage);
+          setResumeToast({ page: savedPage, show: true });
+          setTimeout(() => setResumeToast((prev) => ({ ...prev, show: false })), 4500);
+        } else {
+          setCurrentPage(1);
+        }
+      } catch (_) {
+        setCurrentPage(1);
+      }
     } catch (err: any) {
       console.error('Error al cargar fanzine:', err);
       setErrorMsg(err.message || 'Error al cargar el fanzine.');
@@ -112,6 +150,15 @@ export default function LeerFanzinePage() {
       initFanzine();
     }
   }, [fanzineId]);
+
+  // Guardar última página en localStorage cuando avanza
+  useEffect(() => {
+    if (fanzineId && currentPage > 0 && totalPages > 0) {
+      try {
+        localStorage.setItem(`fanzine_reading_page_${fanzineId}`, currentPage.toString());
+      } catch (_) {}
+    }
+  }, [fanzineId, currentPage, totalPages]);
 
   // Renderizar la página actual en el canvas
   const renderPage = useCallback(
@@ -274,14 +321,79 @@ export default function LeerFanzinePage() {
     }
   };
 
+  // Clases según tema de lectura (dark, sepia, light)
+  const themeClasses = {
+    dark: {
+      root: 'bg-stone-950 text-stone-100',
+      header: 'bg-stone-900 border-stone-800 text-stone-200',
+      headerButton: 'text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700',
+      controlsBg: 'bg-stone-800 border-stone-700 text-stone-300',
+      main: 'bg-stone-950',
+      canvas: 'shadow-2xl shadow-black/80 ring-1 ring-white/10',
+      footer: 'bg-stone-900/95 border-stone-800',
+      footerBar: 'bg-stone-800/90 border-stone-700/80 text-stone-300',
+      prevBtn: 'bg-stone-700/80 hover:bg-stone-700 text-white',
+      pageHighlight: 'text-white',
+    },
+    sepia: {
+      root: 'bg-[#F4ECD8] text-[#422D1D]',
+      header: 'bg-[#EADDC2] border-[#D8C7A5] text-[#422D1D]',
+      headerButton: 'text-[#422D1D] hover:text-stone-900 bg-[#DECEAD] hover:bg-[#D4C3A0]',
+      controlsBg: 'bg-[#DECEAD] border-[#D8C7A5] text-[#422D1D]',
+      main: 'bg-[#F4ECD8]',
+      canvas: 'shadow-2xl shadow-[#422D1D]/20 ring-1 ring-[#D8C7A5]',
+      footer: 'bg-[#EADDC2]/95 border-[#D8C7A5]',
+      footerBar: 'bg-[#DECEAD]/95 border-[#D8C7A5] text-[#422D1D]',
+      prevBtn: 'bg-[#CEBE9D] hover:bg-[#C2B18E] text-[#422D1D]',
+      pageHighlight: 'text-[#2D1B0F]',
+    },
+    light: {
+      root: 'bg-stone-200 text-stone-900',
+      header: 'bg-white border-stone-300 text-stone-800',
+      headerButton: 'text-stone-700 hover:text-stone-900 bg-stone-100 hover:bg-stone-200',
+      controlsBg: 'bg-stone-100 border-stone-300 text-stone-700',
+      main: 'bg-stone-200',
+      canvas: 'shadow-2xl shadow-stone-500/30 ring-1 ring-stone-300',
+      footer: 'bg-white/95 border-stone-300',
+      footerBar: 'bg-stone-100/95 border-stone-300 text-stone-700',
+      prevBtn: 'bg-stone-200 hover:bg-stone-300 text-stone-800',
+      pageHighlight: 'text-stone-900',
+    },
+  };
+
+  const currentTheme = themeClasses[readerTheme];
+
   return (
-    <div className="fixed inset-0 z-50 bg-stone-950 flex flex-col select-none overflow-hidden text-stone-100">
+    <div className={`fixed inset-0 z-50 flex flex-col select-none overflow-hidden transition-colors duration-300 ${currentTheme.root}`}>
+      {/* Toast de Marcapáginas / Reanudar Lectura */}
+      {resumeToast.show && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 bg-stone-900/95 text-white border border-brand-500/50 backdrop-blur-md px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-3 text-xs">
+          <BookOpen className="w-4 h-4 text-brand-400 flex-shrink-0" />
+          <span>Continuando desde la <strong className="text-brand-300">página {resumeToast.page}</strong></span>
+          <button
+            onClick={() => {
+              setCurrentPage(1);
+              setResumeToast({ page: 1, show: false });
+            }}
+            className="text-[11px] font-semibold text-brand-300 hover:text-white underline pl-1"
+          >
+            Ir al inicio
+          </button>
+          <button
+            onClick={() => setResumeToast((prev) => ({ ...prev, show: false }))}
+            className="text-stone-400 hover:text-white text-xs pl-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Barra Superior */}
-      <header className="h-14 bg-stone-900 border-b border-stone-800 px-3 sm:px-4 flex items-center justify-between flex-shrink-0 z-20">
+      <header className={`h-14 border-b px-3 sm:px-4 flex items-center justify-between flex-shrink-0 z-20 transition-colors duration-300 ${currentTheme.header}`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Link
             href="/mis-fanzines"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 px-2.5 py-1.5 rounded-xl transition-colors flex-shrink-0"
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-xl transition-colors flex-shrink-0 ${currentTheme.headerButton}`}
             title="Volver a mis fanzines"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -289,22 +401,60 @@ export default function LeerFanzinePage() {
           </Link>
 
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[10px] sm:text-xs font-mono uppercase bg-brand-500/20 text-brand-300 border border-brand-500/30 px-1.5 py-0.5 rounded font-semibold hidden md:inline">
+            <span className="text-[10px] sm:text-xs font-mono uppercase bg-brand-500/20 text-brand-600 dark:text-brand-300 border border-brand-500/30 px-1.5 py-0.5 rounded font-semibold hidden md:inline">
               Lector
             </span>
-            <h1 className="text-xs sm:text-sm font-bold text-stone-200 truncate max-w-[140px] sm:max-w-xs md:max-w-md">
+            <h1 className="text-xs sm:text-sm font-bold truncate max-w-[120px] sm:max-w-xs md:max-w-md">
               {fanzineTitle}
             </h1>
           </div>
         </div>
 
-        {/* Controles de Vista */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        {/* Controles de Vista y Selector de Tema */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Selector de Tema: Noche / Sepia / Día */}
+          <div className={`flex items-center rounded-xl p-0.5 border ${currentTheme.controlsBg}`}>
+            <button
+              onClick={() => changeTheme('dark')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                readerTheme === 'dark'
+                  ? 'bg-stone-700 text-brand-300 shadow-sm'
+                  : 'text-stone-400 hover:text-stone-100'
+              }`}
+              title="Modo Noche (Oscuro)"
+            >
+              <Moon className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => changeTheme('sepia')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                readerTheme === 'sepia'
+                  ? 'bg-[#CDBE9F] text-[#422D1D] font-bold shadow-sm'
+                  : 'text-stone-400 hover:text-stone-700'
+              }`}
+              title="Modo Sepia (Cálido / Papel)"
+            >
+              <Coffee className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => changeTheme('light')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                readerTheme === 'light'
+                  ? 'bg-white text-stone-900 shadow-sm font-bold'
+                  : 'text-stone-400 hover:text-stone-800'
+              }`}
+              title="Modo Día (Claro)"
+            >
+              <Sun className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Zoom controls */}
           {totalPages > 0 && (
-            <div className="flex items-center bg-stone-800 rounded-xl p-0.5 border border-stone-700">
+            <div className={`hidden sm:flex items-center rounded-xl p-0.5 border ${currentTheme.controlsBg}`}>
               <button
                 onClick={handleZoomOut}
-                className="p-1.5 text-stone-300 hover:text-white hover:bg-stone-700 rounded-lg transition-colors"
+                className="p-1.5 hover:opacity-80 rounded-lg transition-colors"
                 title="Alejar (-)"
               >
                 <ZoomOut className="w-3.5 h-3.5" />
@@ -312,9 +462,7 @@ export default function LeerFanzinePage() {
               <button
                 onClick={handleResetZoom}
                 className={`px-2 py-1 text-[11px] font-mono rounded-lg transition-colors ${
-                  isAutoFit
-                    ? 'text-brand-300 bg-brand-600/30 font-semibold'
-                    : 'text-stone-300 hover:text-white'
+                  isAutoFit ? 'text-brand-500 font-semibold' : 'hover:opacity-80'
                 }`}
                 title="Ajustar al ancho de pantalla"
               >
@@ -322,7 +470,7 @@ export default function LeerFanzinePage() {
               </button>
               <button
                 onClick={handleZoomIn}
-                className="p-1.5 text-stone-300 hover:text-white hover:bg-stone-700 rounded-lg transition-colors"
+                className="p-1.5 hover:opacity-80 rounded-lg transition-colors"
                 title="Acercar (+)"
               >
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -332,7 +480,7 @@ export default function LeerFanzinePage() {
 
           <button
             onClick={toggleFullscreen}
-            className="p-2 text-stone-300 hover:text-white bg-stone-800 hover:bg-stone-700 rounded-xl transition-colors inline-flex"
+            className={`p-2 rounded-xl transition-colors inline-flex ${currentTheme.headerButton}`}
             title="Pantalla completa"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -346,21 +494,21 @@ export default function LeerFanzinePage() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         onContextMenu={(e) => e.preventDefault()}
-        className="flex-1 w-full bg-stone-950 flex items-center justify-center relative overflow-auto p-2 sm:p-4 select-none"
+        className={`flex-1 w-full flex items-center justify-center relative overflow-auto p-2 sm:p-4 select-none transition-colors duration-300 ${currentTheme.main}`}
       >
         {loading ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">
             <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-sm font-semibold text-stone-200">{loadingMessage}</p>
-            <p className="text-xs text-stone-500 mt-1">Preparando páginas para tu dispositivo</p>
+            <p className="text-sm font-semibold">{loadingMessage}</p>
+            <p className="text-xs opacity-60 mt-1">Preparando páginas para tu dispositivo</p>
           </div>
         ) : errorMsg ? (
           <div className="flex flex-col items-center justify-center p-6 text-center max-w-sm">
             <div className="w-12 h-12 bg-red-950/80 border border-red-800 text-red-400 rounded-2xl flex items-center justify-center mb-4">
               <AlertCircle className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white">No se pudo abrir el fanzine</h3>
-            <p className="text-xs text-stone-400 mt-2">{errorMsg}</p>
+            <h3 className="text-base font-bold">No se pudo abrir el fanzine</h3>
+            <p className="text-xs opacity-75 mt-2">{errorMsg}</p>
             <div className="mt-6 flex items-center gap-3">
               <button
                 onClick={initFanzine}
@@ -382,7 +530,7 @@ export default function LeerFanzinePage() {
             {/* Canvas donde se dibuja la página */}
             <canvas
               ref={canvasRef}
-              className="rounded-lg shadow-2xl bg-white max-w-none transition-shadow duration-200"
+              className={`rounded-lg bg-white max-w-none transition-all duration-300 ${currentTheme.canvas}`}
             />
 
             {/* Zonas de navegación táctil a los costados (pantalla completa) */}
@@ -393,7 +541,7 @@ export default function LeerFanzinePage() {
             >
               {currentPage > 1 && (
                 <div className="bg-stone-900/80 p-2 rounded-full backdrop-blur-sm shadow-lg">
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="w-5 h-5 text-white" />
                 </div>
               )}
             </div>
@@ -405,7 +553,7 @@ export default function LeerFanzinePage() {
             >
               {currentPage < totalPages && (
                 <div className="bg-stone-900/80 p-2 rounded-full backdrop-blur-sm shadow-lg">
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-5 h-5 text-white" />
                 </div>
               )}
             </div>
@@ -415,26 +563,26 @@ export default function LeerFanzinePage() {
 
       {/* Barra Inferior Flotante de Páginas */}
       {!loading && !errorMsg && totalPages > 0 && (
-        <footer className="h-14 bg-stone-900/95 backdrop-blur-sm border-t border-stone-800 px-4 flex items-center justify-center flex-shrink-0 z-20">
-          <div className="flex items-center gap-3 bg-stone-800/90 border border-stone-700/80 px-3 py-1.5 rounded-2xl shadow-lg">
+        <footer className={`h-14 backdrop-blur-sm border-t px-4 flex items-center justify-center flex-shrink-0 z-20 transition-colors duration-300 ${currentTheme.footer}`}>
+          <div className={`flex items-center gap-3 border px-3 py-1.5 rounded-2xl shadow-lg transition-colors duration-300 ${currentTheme.footerBar}`}>
             <button
               onClick={goToPrevPage}
               disabled={currentPage <= 1}
-              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-stone-700/80 hover:bg-stone-700 disabled:opacity-30 disabled:hover:bg-stone-700/80 text-white transition-all"
+              className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl disabled:opacity-30 transition-all ${currentTheme.prevBtn}`}
             >
               <ChevronLeft className="w-4 h-4" />
               <span className="hidden sm:inline">Anterior</span>
             </button>
 
-            <span className="text-xs font-mono font-medium text-stone-300 px-2">
-              Página <strong className="text-white font-bold">{currentPage}</strong> de{' '}
+            <span className="text-xs font-mono font-medium px-2">
+              Página <strong className={`font-bold ${currentTheme.pageHighlight}`}>{currentPage}</strong> de{' '}
               <strong>{totalPages}</strong>
             </span>
 
             <button
               onClick={goToNextPage}
               disabled={currentPage >= totalPages}
-              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-30 disabled:hover:bg-brand-600 text-white transition-all shadow-sm"
+              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:opacity-30 text-white transition-all shadow-sm"
             >
               <span className="hidden sm:inline">Siguiente</span>
               <ChevronRight className="w-4 h-4" />

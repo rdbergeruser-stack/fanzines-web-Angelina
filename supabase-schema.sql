@@ -149,7 +149,29 @@ create policy "Admin gestiona notificaciones"
   using (public.is_admin() or auth.role() = 'service_role');
 
 
--- 5. Vincular a Angelina si ya existe en auth.users
+-- 5. Tabla de Autores (authors - Ficha y Perfil público)
+create table if not exists public.authors (
+  id uuid default gen_random_uuid() primary key,
+  name text unique not null,
+  bio text,
+  instagram text,
+  avatar_url text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.authors enable row level security;
+
+drop policy if exists "Cualquiera puede ver autores" on public.authors;
+create policy "Cualquiera puede ver autores"
+  on public.authors for select
+  using (true);
+
+drop policy if exists "Admin gestiona autores" on public.authors;
+create policy "Admin gestiona autores"
+  on public.authors for all
+  using (public.is_admin() or auth.role() = 'service_role');
+
+-- 6. Vincular a Angelina si ya existe en auth.users
 insert into public.profiles (id, email, full_name, role)
 select id, email, coalesce(raw_user_meta_data->>'full_name', 'Angelina'), 'admin'
 from auth.users
